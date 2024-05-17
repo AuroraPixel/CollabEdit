@@ -34,7 +34,7 @@ func (eh *EventHandler) RemoveEvent(event func(arg0 interface{}, arg1 interface{
 		}
 	}
 	if len(newEvents) == len(eh.Events) {
-		log.Fatalf("[CollabEdit:] Tried to remove event handler that doesn't exist.")
+		log.Fatalf("[CollabEdit] Tried to remove event handler that doesn't exist.")
 	}
 	eh.Events = newEvents
 }
