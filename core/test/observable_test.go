@@ -1,10 +1,13 @@
-package core
+package test
 
-import "testing"
+import (
+	"CollabEdit/core"
+	"testing"
+)
 
 func TestObservable(t *testing.T) {
 	// 创建一个新的 observable
-	eventBus := NewObservable()
+	eventBus := core.NewObservable()
 
 	// 定义观察者
 	var logMessage string
