@@ -8,13 +8,15 @@ import (
 
 // Encoder Encoder结构体
 type Encoder struct {
-	Buffer *bytes.Buffer //字节缓冲区
+	Buffer    *bytes.Buffer //字节缓冲区
+	DsCurrVal int           //当前指针值
 }
 
 // NewEncoder 创建Encoder实例
 func NewEncoder() *Encoder {
 	return &Encoder{
-		Buffer: new(bytes.Buffer),
+		Buffer:    new(bytes.Buffer),
+		DsCurrVal: 0,
 	}
 }
 
@@ -37,6 +39,27 @@ func (e *Encoder) WriteString(value string) {
 	length := uint64(len(value))
 	e.WriteVarUint(length)
 	e.Buffer.WriteString(value)
+}
+
+// WriteDsClock 写入一个时钟值，使用增量编码
+func (e *Encoder) WriteDsClock(clock int) {
+	diff := clock - e.DsCurrVal
+	e.DsCurrVal = clock
+	e.WriteVarUint(uint64(diff))
+}
+
+// WriteDsLen 写入一个长度值，并更新当前时钟值
+func (e *Encoder) WriteDsLen(length int) {
+	if length == 0 {
+		panic("unexpected case: length cannot be zero")
+	}
+	e.WriteVarUint(uint64(length - 1))
+	e.DsCurrVal += length
+}
+
+// ResetDsCurVal 重置当前的 dsCurrVal 为 0
+func (e *Encoder) ResetDsCurVal() {
+	e.DsCurrVal = 0
 }
 
 // Bytes 返回缓冲区的数据
