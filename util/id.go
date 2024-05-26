@@ -29,13 +29,7 @@ func WriteID(encoder *core.Encoder, id *ID) {
 
 // ReadID 从解码器读取ID
 func ReadID(decoder core.Decoder) *ID {
-	client, err := decoder.ReadVarUint()
-	if err != nil {
-		panic(err)
-	}
-	clock, err := decoder.ReadVarUint()
-	if err != nil {
-		panic(err)
-	}
+	client := decoder.ReadVarUint()
+	clock := decoder.ReadVarUint()
 	return NewID(client, clock)
 }

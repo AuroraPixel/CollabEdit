@@ -1,131 +1,363 @@
 package core
 
 import (
-	"bytes"
-	"errors"
-	"io"
+	"encoding/binary"
+	"math"
+	"reflect"
 )
 
-// Encoder Encoder结构体
 type Encoder struct {
-	Buffer    *bytes.Buffer //字节缓冲区
-	DsCurrVal int           //当前指针值
+	CPos  int      `json:"c_pos"` //当前写入的位置
+	CBuf  []byte   `json:"c_buf"` //缓冲区
+	Buffs [][]byte `json:"buffs"` //缓冲区列表
 }
 
-// NewEncoder 创建Encoder实例
-func NewEncoder() *Encoder {
+// CreateEncoder 创建编码器
+func CreateEncoder() *Encoder {
 	return &Encoder{
-		Buffer:    new(bytes.Buffer),
-		DsCurrVal: 0,
+		CPos:  0,
+		CBuf:  make([]byte, 100),
+		Buffs: make([][]byte, 0),
 	}
 }
 
-// Write 将字节数据写入缓冲区
-func (e *Encoder) Write(data []byte) {
-	e.Buffer.Write(data)
-}
-
-// WriteVarUint 写入一个可变长度的uint值
-func (e *Encoder) WriteVarUint(value uint64) {
-	for value >= 0x80 {
-		e.Buffer.WriteByte(byte(value) | 0x80)
-		value >>= 7
+// Length 编码器长度
+func (e *Encoder) Length() int {
+	lens := e.CPos
+	for _, buf := range e.Buffs {
+		lens += len(buf)
 	}
-	e.Buffer.WriteByte(byte(value))
+	return lens
 }
 
-// WriteString 写入一个字符串
-func (e *Encoder) WriteString(value string) {
-	length := uint64(len(value))
-	e.WriteVarUint(length)
-	e.Buffer.WriteString(value)
+// HasContent 是否有内容
+func (e *Encoder) HasContent() bool {
+	return e.CPos > 0 || len(e.Buffs) > 0
 }
 
-// WriteDsClock 写入一个时钟值，使用增量编码
-func (e *Encoder) WriteDsClock(clock int) {
-	diff := clock - e.DsCurrVal
-	e.DsCurrVal = clock
-	e.WriteVarUint(uint64(diff))
-}
-
-// WriteDsLen 写入一个长度值，并更新当前时钟值
-func (e *Encoder) WriteDsLen(length int) {
-	if length == 0 {
-		panic("unexpected case: length cannot be zero")
+// ToBytes 编码器内容转为字节数据
+func (e *Encoder) ToBytes() []byte {
+	by := make([]byte, e.Length())
+	cPos := 0
+	for _, buf := range e.Buffs {
+		copy(by[cPos:], buf)
+		cPos += len(buf)
 	}
-	e.WriteVarUint(uint64(length - 1))
-	e.DsCurrVal += length
+	copy(by[cPos:], e.CBuf[:e.CPos])
+	return by
 }
 
-// ResetDsCurVal 重置当前的 dsCurrVal 为 0
-func (e *Encoder) ResetDsCurVal() {
-	e.DsCurrVal = 0
-}
-
-// Bytes 返回缓冲区的数据
-func (e *Encoder) Bytes() []byte {
-	return e.Buffer.Bytes()
-}
-
-// Decoder 结构体
-type Decoder struct {
-	Buffer *bytes.Buffer
-}
-
-// NewDecoder 创建一个新的解码器
-func NewDecoder(data []byte) *Decoder {
-	return &Decoder{
-		Buffer: bytes.NewBuffer(data),
+// VerifyLength 验证是否可以写入指定长度的数据，如果不行，则分配新的缓冲区
+func (e *Encoder) VerifyLength(lens int) {
+	//获取当前缓冲区长度
+	bufferLen := cap(e.CBuf)
+	if bufferLen-e.CPos < lens { //如果缓冲区空间不够
+		e.Buffs = append(e.Buffs, e.CBuf[:e.CPos])                                //复制缓冲区到缓冲区列表
+		e.CBuf = make([]byte, int(math.Max(float64(bufferLen), float64(lens)))*2) //分配新的缓冲区
+		e.CPos = 0                                                                //重置写入位置
 	}
 }
 
-// Read 从缓冲区中读取指定长度的字节数据
-func (d *Decoder) Read(data []byte) (int, error) {
-	return d.Buffer.Read(data)
+// Write 向编码器写入一个字节
+func (e *Encoder) Write(num byte) {
+	bufferLen := cap(e.CBuf)
+	if e.CPos == bufferLen {
+		e.Buffs = append(e.Buffs, e.CBuf)
+		e.CBuf = make([]byte, bufferLen*2)
+		e.CPos = 0
+	}
+	e.CBuf[e.CPos] = num
+	e.CPos++
 }
 
-// ReadVarUint 解码为变int值
-func (d *Decoder) ReadVarUint() (uint64, error) {
-	var value uint64
-	var shift uint
-	for {
-		b, err := d.Buffer.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				return 0, errors.New("unexpected end of data while reading VarUint")
-			}
-			return 0, err
-		}
-		value |= uint64(b&0x7F) << shift
-		if b&0x80 == 0 {
+// Set  指定位置写入一个字节
+func (e *Encoder) Set(pos int, num byte) {
+	buffer := e.CBuf
+	for _, b := range e.Buffs {
+		if pos < len(b) {
+			buffer = b
 			break
 		}
-		shift += 7
-		if shift > 64 {
-			return 0, errors.New("VarUint value is too large")
+		pos -= len(b)
+	}
+	buffer[pos] = num
+}
+
+// WriteByte 写一个字节
+func (e *Encoder) WriteByte(num byte) {
+	e.Write(num)
+}
+
+// SetByte 指定位置写一个字节
+func (e *Encoder) SetByte(pos int, num byte) {
+	e.Set(pos, num)
+}
+
+// WriteUint16 写入一个uint16
+func (e *Encoder) WriteUint16(num uint16) {
+	e.Write(byte(num & 0xFF))
+	e.Write(byte((num >> 8) & 0xFF))
+}
+
+// SetUint16 指定位置写入一个uint16
+func (e *Encoder) SetUint16(pos int, num uint16) {
+	e.Set(pos, byte(num&0xFF))
+	e.Set(pos+1, byte((num>>8)&0xFF))
+}
+
+// WriteUint32 写入一个uint32
+func (e *Encoder) WriteUint32(num uint32) {
+	for i := 0; i < 4; i++ {
+		e.Write(byte(num & 0xFF))
+		num >>= 8
+	}
+}
+
+// WriteUint32BigEndian 写入一个uint32（大端序）
+func (e *Encoder) WriteUint32BigEndian(num uint32) {
+	for i := 3; i >= 0; i-- {
+		e.Write(byte((num >> (8 * i)) & 0xFF))
+	}
+}
+
+// SetUint32 指定位置写入一个uint32
+func (e *Encoder) SetUint32(pos int, num uint32) {
+	for i := 0; i < 4; i++ {
+		e.Set(pos+i, byte(num&0xFF))
+		num >>= 8
+	}
+}
+
+// WriteVarUint 写入一个变长无符号整数
+func (e *Encoder) WriteVarUint(num uint64) {
+	for num > 0x7F {
+		e.Write(byte(0x80 | (num & 0x7F)))
+		num >>= 7
+	}
+	e.Write(byte(num))
+}
+
+// WriteVarInt 写入一个变长整数
+func (e *Encoder) WriteVarInt(num int64) {
+	isNegative := num < 0
+	if isNegative {
+		num = -num
+	}
+	for num > 0x3F {
+		e.Write(byte(0x80 | (num & 0x3F) | (boolToByte(isNegative) << 6)))
+		num >>= 6
+	}
+	e.Write(byte(num | (boolToByte(isNegative) << 6)))
+}
+
+// 将布尔值转换为字节
+func boolToByte(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// WriteByteArray 写入一个字节数组
+func (e *Encoder) WriteByteArray(byteArr []byte) {
+	bufferLen := cap(e.CBuf) //当前缓冲区的容量
+	cpos := e.CPos           //获取当前写入位置
+	// 计算当前缓冲区可以写入的字节数量
+	leftCopyLen := int(math.Min(float64(bufferLen-cpos), float64(len(byteArr))))
+	// 计算剩余需要写入的字节数
+	rightCopyLen := len(byteArr) - leftCopyLen
+	// 将 byteArr 的前 leftCopyLen 个字节复制到当前缓冲区的 cpos 位置
+	copy(e.CBuf[cpos:], byteArr[:leftCopyLen])
+	// 更新当前写入位置
+	e.CPos += leftCopyLen
+	// 如果还有剩余的字节需要写入
+	if rightCopyLen > 0 {
+		// 将当前缓冲区添加到缓冲区列表中
+		e.Buffs = append(e.Buffs, e.CBuf)
+		// 分配一个新的更大容量的缓冲区
+		e.CBuf = make([]byte, int(math.Max(float64(bufferLen*2), float64(rightCopyLen))))
+		// 将剩余的字节复制到新的缓冲区中
+		copy(e.CBuf, byteArr[leftCopyLen:])
+		// 更新当前写入位置为剩余字节数的长度
+		e.CPos = rightCopyLen
+	}
+}
+
+// WriteVarByteArray 写入一个可变长度的 Uint8Array
+func (e *Encoder) WriteVarByteArray(uint8Array []byte) {
+	e.WriteVarUint(uint64(len(uint8Array))) // 先写入字节数组的长度
+	e.WriteByteArray(uint8Array)            // 然后写入字节数组本身
+}
+
+// WriteTerminatedUint8Array 写入一个以特殊字节序列结尾的Uint8Array
+func (e *Encoder) WriteTerminatedUint8Array(buf []byte) {
+	for _, b := range buf {
+		if b == 0 || b == 1 {
+			e.Write(1)
 		}
+		e.Write(b)
 	}
-	return value, nil
+	e.Write(0)
 }
 
-// ReadString 解码为字符串
-func (d *Decoder) ReadString() (string, error) {
-	length, err := d.ReadVarUint()
-	if err != nil {
-		return "", err
+// 定义一个缓存来临时存储字符串
+var strBuffer = make([]byte, 30000)
+var maxStrBSize = len(strBuffer) / 3
+
+// WriteString 写入一个字符串
+func (e *Encoder) WriteString(str string) {
+	if len(str) < maxStrBSize {
+		// 可以将字符串编码到现有的缓冲区中
+		written := copy(strBuffer, []byte(str))
+		e.WriteVarUint(uint64(written))
+		for i := 0; i < written; i++ {
+			e.Write(strBuffer[i])
+		}
+	} else {
+		e.WriteByteArray([]byte(str))
 	}
-	if length > uint64(d.Buffer.Len()) {
-		return "", errors.New("string length exceeds remaining Buffer length")
-	}
-	buf := make([]byte, length)
-	_, err = io.ReadFull(d.Buffer, buf)
-	if err != nil {
-		return "", err
-	}
-	return string(buf), nil
 }
 
-// HasContent 检查是否还有内容未读取
-func (d *Decoder) HasContent() bool {
-	return d.Buffer.Len() > 0
+// WriteTerminatedString 写入一个以特殊字节序列结尾的字符串
+func (e *Encoder) WriteTerminatedString(str string) {
+	e.WriteTerminatedUint8Array([]byte(str))
+}
+
+// WriteBinaryEncoder 写入一个编码器
+func (e *Encoder) WriteBinaryEncoder(encoder *Encoder) {
+	e.WriteByteArray(encoder.ToBytes())
+}
+
+// WriteOnDataView 创建一个指定长度的缓冲区，用于写入数据
+func (e *Encoder) WriteOnDataView(length int) []byte {
+	e.VerifyLength(length)                  // 确认缓冲区有足够的空间
+	dview := e.CBuf[e.CPos : e.CPos+length] // 获取缓冲区的切片
+	e.CPos += length                        // 更新当前写入位置
+	return dview                            // 返回切片
+}
+
+// WriteFloat32 写入一个 float32
+func (e *Encoder) WriteFloat32(num float32) {
+	dview := e.WriteOnDataView(4)
+	binary.LittleEndian.PutUint32(dview, math.Float32bits(num))
+}
+
+// WriteFloat64 写入一个 float64
+func (e *Encoder) WriteFloat64(num float64) {
+	dview := e.WriteOnDataView(8)
+	binary.LittleEndian.PutUint64(dview, math.Float64bits(num))
+}
+
+// WriteBigInt64 写入一个 int64
+func (e *Encoder) WriteBigInt64(num int64) {
+	dview := e.WriteOnDataView(8)
+	binary.LittleEndian.PutUint64(dview, uint64(num))
+}
+
+// WriteBigUint64 写入一个 uint64
+func (e *Encoder) WriteBigUint64(num uint64) {
+	dview := e.WriteOnDataView(8)
+	binary.LittleEndian.PutUint64(dview, num)
+}
+
+// isFloat32 检查一个数是否可以作为32位浮点数进行编码
+func isFloat32(num float64) bool {
+	// 将float64转换为float32再转换回来
+	return float64(float32(num)) == num
+}
+
+// WriteAny
+/**
+ * 使用高效的二进制格式编码数据。
+ *
+ * 与 JSON 的不同之处：
+ * • 将数据转换为二进制格式（而不是字符串）
+ * • 编码 undefined, NaN 和 ArrayBuffer（这些不能在 JSON 中表示）
+ * • 数字以可变长度整数、32 位浮点数、64 位浮点数或 64 位 bigint 编码。
+ *
+ * 编码表：
+ *
+ * | 数据类型             | 前缀   | 编码方法           | 备注 |
+ * | ------------------- | ------ | ------------------ | ---- |
+ * | undefined           | 127    |                    | 函数、符号和无法识别的内容编码为 undefined |
+ * | null                | 126    |                    | |
+ * | integer             | 125    | writeVarInt        | 只编码 32 位有符号整数 |
+ * | float32             | 124    | writeFloat32       | |
+ * | float64             | 123    | writeFloat64       | |
+ * | bigint              | 122    | writeBigInt64      | |
+ * | boolean (false)     | 121    |                    | 真和假是不同的数据类型，所以我们保存以下字节 |
+ * | boolean (true)      | 120    |                    | - 0b01111000 所以最后一位决定真或假 |
+ * | string              | 119    | writeVarString     | |
+ * | object<string,any>  | 118    | custom             | 写入 {length} 然后是 {length} 个键值对 |
+ * | array<any>          | 117    | custom             | 写入 {length} 然后是 {length} 个 json 值 |
+ * | Uint8Array          | 116    | writeVarUint8Array | 我们使用 Uint8Array 来表示任何类型的二进制数据 |
+ *
+ * 递减前缀的原因：
+ * 我们需要第一个位来扩展性（以后我们可能希望使用 writeVarUint 编码前缀）。剩下的 7 位划分如下：
+ * [0-30]   数据范围的开始部分用于自定义用途
+ *          （由使用此库的函数定义）
+ * [31-127] 数据范围的末尾用于 lib0/encoding.js 编码数据
+ *
+ * @param encoder *Encoder 编码器实例
+ * @param data interface{} 要编码的数据（可以是 undefined、null、number、bigint、boolean、string、map 或 slice）
+ */
+func (e *Encoder) WriteAny(data interface{}) {
+	switch v := data.(type) {
+	case string:
+		// TYPE 119: STRING
+		e.Write(119)
+		e.WriteString(v)
+	case int, int32, int64:
+		if v.(int64) <= math.MaxInt32 && v.(int64) >= math.MinInt32 {
+			// TYPE 125: INTEGER
+			e.Write(125)
+			e.WriteVarInt(v.(int64))
+		} else {
+			// TYPE 122: BigInt
+			e.Write(122)
+			e.WriteBigInt64(v.(int64))
+		}
+	case float32:
+		// TYPE 124: FLOAT32
+		e.Write(124)
+		e.WriteFloat32(v)
+	case float64:
+		// TYPE 123: FLOAT64
+		e.Write(123)
+		e.WriteFloat64(v)
+	case bool:
+		if v {
+			// TYPE 120: boolean (true)
+			e.Write(120)
+		} else {
+			// TYPE 121: boolean (false)
+			e.Write(121)
+		}
+	case nil:
+		// TYPE 126: null
+		e.Write(126)
+	case []interface{}:
+		// TYPE 117: Array
+		e.Write(117)
+		e.WriteVarUint(uint64(len(v)))
+		for _, elem := range v {
+			e.WriteAny(elem)
+		}
+	case []byte:
+		// TYPE 116: ArrayBuffer
+		e.Write(116)
+		e.WriteByteArray(v)
+	case map[string]interface{}:
+		// TYPE 118: Object
+		e.Write(118)
+		keys := reflect.ValueOf(data).MapKeys()
+		e.WriteVarUint(uint64(len(keys)))
+		for _, key := range keys {
+			e.WriteString(key.String())
+			e.WriteAny(v[key.String()])
+		}
+	default:
+		// TYPE 127: undefined
+		e.Write(127)
+	}
 }
