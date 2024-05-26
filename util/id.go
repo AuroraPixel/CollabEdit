@@ -22,13 +22,13 @@ func CompareIDs(a, b *ID) bool {
 }
 
 // WriteID 将ID写入编码器
-func WriteID(encoder *core.Encoder, id *ID) {
+func (id *ID) WriteID(encoder core.Encoder) {
 	encoder.WriteVarUint(id.client)
 	encoder.WriteVarUint(id.clock)
 }
 
 // ReadID 从解码器读取ID
-func ReadID(decoder core.Decoder) *ID {
+func (id *ID) ReadID(decoder core.Decoder) *ID {
 	client := decoder.ReadVarUint()
 	clock := decoder.ReadVarUint()
 	return NewID(client, clock)

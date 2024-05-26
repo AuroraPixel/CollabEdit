@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"reflect"
+	"strings"
 )
 
 type Encoder struct {
@@ -360,4 +361,271 @@ func (e *Encoder) WriteAny(data interface{}) {
 		// TYPE 127: undefined
 		e.Write(127)
 	}
+}
+
+// RleEncoder 结构体，继承自 Encoder
+type RleEncoder struct {
+	*Encoder
+	w     interface{}
+	s     interface{}
+	count int
+}
+
+// NewRleEncoder 创建一个新的 RleEncoder 实例
+func NewRleEncoder(writer interface{}) *RleEncoder {
+	return &RleEncoder{
+		Encoder: CreateEncoder(),
+		w:       writer,
+		s:       nil,
+		count:   0,
+	}
+}
+
+// Write 向 RleEncoder 写入一个值
+func (e *RleEncoder) Write(v interface{}) {
+	if e.s == v {
+		e.count++
+	} else {
+		if e.count > 0 {
+			e.WriteVarUint(uint64(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
+		}
+		e.count = 1
+		e.w(*e.Encoder, v)
+		e.s = v
+	}
+}
+
+// IntDiffEncoder 结构体，继承自 Encoder
+type IntDiffEncoder struct {
+	*Encoder
+	s int
+}
+
+// NewIntDiffEncoder 创建一个新的 IntDiffEncoder 实例
+func NewIntDiffEncoder(start int) *IntDiffEncoder {
+	return &IntDiffEncoder{
+		Encoder: CreateEncoder(),
+		s:       start,
+	}
+}
+
+// Write 向 IntDiffEncoder 写入一个值
+func (e *IntDiffEncoder) Write(v int) {
+	e.WriteVarInt(int64(v - e.s))
+	e.s = v
+}
+
+// RleIntDiffEncoder 结构体，继承自 Encoder
+type RleIntDiffEncoder struct {
+	*Encoder
+	s     int
+	count int
+}
+
+// NewRleIntDiffEncoder 创建一个新的 RleIntDiffEncoder 实例
+func NewRleIntDiffEncoder(start int) *RleIntDiffEncoder {
+	return &RleIntDiffEncoder{
+		Encoder: CreateEncoder(),
+		s:       start,
+		count:   0,
+	}
+}
+
+// Write 向 RleIntDiffEncoder 写入一个值
+func (e *RleIntDiffEncoder) Write(v int) {
+	if e.s == v && e.count > 0 {
+		e.count++
+	} else {
+		if e.count > 0 {
+			e.WriteVarUint(uint64(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
+		}
+		e.count = 1
+		e.WriteVarInt(int64(v - e.s))
+		e.s = v
+	}
+}
+
+// UintOptRleEncoder 结构体
+type UintOptRleEncoder struct {
+	*Encoder
+	s     int
+	count int
+}
+
+// NewUintOptRleEncoder 创建一个新的 UintOptRleEncoder 实例
+func NewUintOptRleEncoder() *UintOptRleEncoder {
+	return &UintOptRleEncoder{
+		Encoder: CreateEncoder(),
+		s:       0,
+		count:   0,
+	}
+}
+
+// Write 向 UintOptRleEncoder 写入一个值
+func (e *UintOptRleEncoder) Write(v int) {
+	if e.s == v {
+		e.count++
+	} else {
+		flushUintOptRleEncoder(e)
+		e.count = 1
+		e.s = v
+	}
+}
+
+// ToByteArray 刷新编码状态并转换为 byte[]
+func (e *UintOptRleEncoder) ToByteArray() []byte {
+	flushUintOptRleEncoder(e)
+	return e.ToByteArray()
+}
+
+// flushUintOptRleEncoder 刷新 UintOptRleEncoder 的状态
+func flushUintOptRleEncoder(e *UintOptRleEncoder) {
+	if e.count > 0 {
+		var s int
+		if e.count == 1 {
+			s = e.s
+		} else {
+			s = -e.s
+		}
+		e.WriteVarInt(int64(s))
+		if e.count > 1 {
+			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+		}
+	}
+}
+
+// IncUintOptRleEncoder 结构体
+type IncUintOptRleEncoder struct {
+	*Encoder
+	s     int
+	count int
+}
+
+// NewIncUintOptRleEncoder 创建一个新的 IncUintOptRleEncoder 实例
+func NewIncUintOptRleEncoder() *IncUintOptRleEncoder {
+	return &IncUintOptRleEncoder{
+		Encoder: CreateEncoder(),
+		s:       0,
+		count:   0,
+	}
+}
+
+// flushIncUintOptRleEncoder 刷新 IncUintOptRleEncoder 的状态
+func flushIncUintOptRleEncoder(e *IncUintOptRleEncoder) {
+	if e.count > 0 {
+		var s int
+		if e.count == 1 {
+			s = e.s
+		} else {
+			s = -e.s
+		}
+		e.WriteVarInt(int64(s))
+		if e.count > 1 {
+			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+		}
+	}
+}
+
+// Write 向 IncUintOptRleEncoder 写入一个值
+func (e *IncUintOptRleEncoder) Write(v int) {
+	if e.s+e.count == v {
+		e.count++
+	} else {
+		flushIncUintOptRleEncoder(e)
+		e.count = 1
+		e.s = v
+	}
+}
+
+// ToByteArray 刷新编码状态并转换为 ByteArray
+func (e *IncUintOptRleEncoder) ToByteArray() []byte {
+	flushIncUintOptRleEncoder(e)
+	return e.ToBytes()
+}
+
+// IntDiffOptRleEncoder 结构体
+type IntDiffOptRleEncoder struct {
+	*Encoder
+	s     int
+	count int
+	diff  int
+}
+
+// NewIntDiffOptRleEncoder 创建一个新的 IntDiffOptRleEncoder 实例
+func NewIntDiffOptRleEncoder() *IntDiffOptRleEncoder {
+	return &IntDiffOptRleEncoder{
+		Encoder: CreateEncoder(),
+		s:       0,
+		count:   0,
+		diff:    0,
+	}
+}
+
+// Write 向 IntDiffOptRleEncoder 写入一个值
+func (e *IntDiffOptRleEncoder) Write(v int) {
+	if e.diff == v-e.s {
+		e.s = v
+		e.count++
+	} else {
+		flushIntDiffOptRleEncoder(e)
+		e.count = 1
+		e.diff = v - e.s
+		e.s = v
+	}
+}
+
+// ToByteArray 刷新编码状态并转换为 Uint8Array
+func (e *IntDiffOptRleEncoder) ToByteArray() []byte {
+	flushIntDiffOptRleEncoder(e)
+	return e.ToBytes()
+}
+
+// flushIntDiffOptRleEncoder 刷新 IntDiffOptRleEncoder 的状态
+func flushIntDiffOptRleEncoder(e *IntDiffOptRleEncoder) {
+	if e.count > 0 {
+		encodedDiff := e.diff*2 + 1
+		if e.count == 1 {
+			encodedDiff = e.diff*2 + 0
+		}
+		e.WriteVarInt(int64(encodedDiff))
+		if e.count > 1 {
+			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+		}
+	}
+}
+
+// StringEncoder 结构体
+type StringEncoder struct {
+	sarr  []string
+	s     string
+	lensE *UintOptRleEncoder
+}
+
+// NewStringEncoder 创建一个新的 StringEncoder 实例
+func NewStringEncoder() *StringEncoder {
+	return &StringEncoder{
+		sarr:  []string{},
+		s:     "",
+		lensE: NewUintOptRleEncoder(),
+	}
+}
+
+// Write 向 StringEncoder 写入一个字符串
+func (e *StringEncoder) Write(str string) {
+	e.s += str
+	if len(e.s) > 19 {
+		e.sarr = append(e.sarr, e.s)
+		e.s = ""
+	}
+	e.lensE.Write(len(str))
+}
+
+// ToByteArray 将 StringEncoder 的内容转换为 Uint8Array
+func (e *StringEncoder) ToByteArray() []byte {
+	encoder := CreateEncoder()
+	e.sarr = append(e.sarr, e.s)
+	e.s = ""
+	encoder.WriteString(strings.Join(e.sarr, ""))
+	encoder.WriteByteArray(e.lensE.ToByteArray())
+	return encoder.ToBytes()
 }
