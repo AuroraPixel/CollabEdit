@@ -1,13 +1,12 @@
 package main
 
 import (
-	"CollabEdit/core"
-	"fmt"
+	"CollabEdit/struts"
+	"CollabEdit/util"
 )
 
 func main() {
-	encoder := core.NewRleEncoder((*core.Encoder).WriteString)
-	encoder.Write("12")
-	bytes := encoder.ToBytes()
-	fmt.Println(bytes)
+	abstractStruct := struts.NewAbstractStruct(nil, 0)
+	v1 := util.NewUpdateEncoderV1()
+	abstractStruct.Write(v1, 0, 0)
 }

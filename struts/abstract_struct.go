@@ -1,12 +1,14 @@
 package struts
 
-import "CollabEdit/util"
+import (
+	"CollabEdit/util"
+)
 
 type AbstractStructInterface interface {
-	Deleted() bool                                          //删除
-	MergeWith(right AbstractStruct) bool                    //合并
-	Write(encoder interface{}, offset int, encodingRef int) //写入
-	Integrate(transaction interface{}, offset int)          //整合
+	Deleted() bool                                                    //删除
+	MergeWith(right *AbstractStruct) bool                             //合并
+	Write(encoder util.EncoderInterface, offset int, encodingRef int) //写入
+	Integrate(transaction interface{}, offset int)                    //整合
 }
 
 type AbstractStruct struct {
@@ -35,7 +37,7 @@ func (a *AbstractStruct) MergeWith(right *AbstractStruct) bool {
 }
 
 // Write 将数据写入编码器
-func (a *AbstractStruct) Write(encoder interface{}, offset int, encodingRef int) {
+func (a *AbstractStruct) Write(encoder util.EncoderInterface, offset int, encodingRef int) {
 	panic("method Write is not implemented")
 }
 
