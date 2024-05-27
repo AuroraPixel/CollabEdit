@@ -482,7 +482,7 @@ func (e *UintOptRleEncoder) Write(v uint64) {
 // ToBytes 刷新编码状态并转换为 byte[]
 func (e *UintOptRleEncoder) ToBytes() []byte {
 	flushUintOptRleEncoder(e)
-	return e.ToBytes()
+	return e.Encoder.ToBytes()
 }
 
 // flushUintOptRleEncoder 刷新 UintOptRleEncoder 的状态
@@ -547,7 +547,7 @@ func (e *IncUintOptRleEncoder) Write(v int) {
 // ToBytes 刷新编码状态并转换为 ByteArray
 func (e *IncUintOptRleEncoder) ToBytes() []byte {
 	flushIncUintOptRleEncoder(e)
-	return e.ToBytes()
+	return e.Encoder.ToBytes()
 }
 
 // IntDiffOptRleEncoder 结构体
@@ -584,7 +584,7 @@ func (e *IntDiffOptRleEncoder) Write(v uint64) {
 // ToBytes 刷新编码状态并转换为 Uint8Array
 func (e *IntDiffOptRleEncoder) ToBytes() []byte {
 	flushIntDiffOptRleEncoder(e)
-	return e.ToBytes()
+	return e.Encoder.ToBytes()
 }
 
 // flushIntDiffOptRleEncoder 刷新 IntDiffOptRleEncoder 的状态
