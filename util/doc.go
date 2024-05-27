@@ -1,8 +1,9 @@
 package util
 
-import "CollabEdit/core"
-
-type Item struct{}
+import (
+	"CollabEdit/core"
+	"CollabEdit/struts"
+)
 
 type Store struct {
 	Clients map[interface{}]interface{}
@@ -12,7 +13,7 @@ type Store struct {
 type Doc struct {
 	core.Observable //继承观察者
 	Gc              bool
-	GcFilter        func(Item) bool
+	GcFilter        func(item struts.Item) bool
 	ClientID        string
 	Guid            string
 	CollectionID    string
