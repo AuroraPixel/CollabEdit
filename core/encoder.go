@@ -381,6 +381,12 @@ func NewRleEncoder(writer interface{}) *RleEncoder {
 	}
 }
 
+func CallFunc(fn interface{}, a *Encoder, b interface{}) {
+	// 使用反射调用函数
+	v := reflect.ValueOf(fn)
+	v.Call([]reflect.Value{reflect.ValueOf(a), reflect.ValueOf(b)})
+}
+
 // Write 向 RleEncoder 写入一个值
 func (e *RleEncoder) Write(v interface{}) {
 	if e.s == v {
@@ -390,7 +396,8 @@ func (e *RleEncoder) Write(v interface{}) {
 			e.WriteVarUint(uint64(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
 		}
 		e.count = 1
-		e.w(*e.Encoder, v)
+		//e.w(e.Encoder, v)
+		CallFunc(e.w, e.Encoder, v)
 		e.s = v
 	}
 }
@@ -448,7 +455,7 @@ func (e *RleIntDiffEncoder) Write(v int) {
 // UintOptRleEncoder 结构体
 type UintOptRleEncoder struct {
 	*Encoder
-	s     int
+	s     uint64
 	count int
 }
 
@@ -462,7 +469,7 @@ func NewUintOptRleEncoder() *UintOptRleEncoder {
 }
 
 // Write 向 UintOptRleEncoder 写入一个值
-func (e *UintOptRleEncoder) Write(v int) {
+func (e *UintOptRleEncoder) Write(v uint64) {
 	if e.s == v {
 		e.count++
 	} else {
@@ -472,16 +479,16 @@ func (e *UintOptRleEncoder) Write(v int) {
 	}
 }
 
-// ToByteArray 刷新编码状态并转换为 byte[]
-func (e *UintOptRleEncoder) ToByteArray() []byte {
+// ToBytes 刷新编码状态并转换为 byte[]
+func (e *UintOptRleEncoder) ToBytes() []byte {
 	flushUintOptRleEncoder(e)
-	return e.ToByteArray()
+	return e.ToBytes()
 }
 
 // flushUintOptRleEncoder 刷新 UintOptRleEncoder 的状态
 func flushUintOptRleEncoder(e *UintOptRleEncoder) {
 	if e.count > 0 {
-		var s int
+		var s uint64
 		if e.count == 1 {
 			s = e.s
 		} else {
@@ -537,8 +544,8 @@ func (e *IncUintOptRleEncoder) Write(v int) {
 	}
 }
 
-// ToByteArray 刷新编码状态并转换为 ByteArray
-func (e *IncUintOptRleEncoder) ToByteArray() []byte {
+// ToBytes 刷新编码状态并转换为 ByteArray
+func (e *IncUintOptRleEncoder) ToBytes() []byte {
 	flushIncUintOptRleEncoder(e)
 	return e.ToBytes()
 }
@@ -546,9 +553,9 @@ func (e *IncUintOptRleEncoder) ToByteArray() []byte {
 // IntDiffOptRleEncoder 结构体
 type IntDiffOptRleEncoder struct {
 	*Encoder
-	s     int
+	s     uint64
 	count int
-	diff  int
+	diff  uint64
 }
 
 // NewIntDiffOptRleEncoder 创建一个新的 IntDiffOptRleEncoder 实例
@@ -562,7 +569,7 @@ func NewIntDiffOptRleEncoder() *IntDiffOptRleEncoder {
 }
 
 // Write 向 IntDiffOptRleEncoder 写入一个值
-func (e *IntDiffOptRleEncoder) Write(v int) {
+func (e *IntDiffOptRleEncoder) Write(v uint64) {
 	if e.diff == v-e.s {
 		e.s = v
 		e.count++
@@ -574,8 +581,8 @@ func (e *IntDiffOptRleEncoder) Write(v int) {
 	}
 }
 
-// ToByteArray 刷新编码状态并转换为 Uint8Array
-func (e *IntDiffOptRleEncoder) ToByteArray() []byte {
+// ToBytes 刷新编码状态并转换为 Uint8Array
+func (e *IntDiffOptRleEncoder) ToBytes() []byte {
 	flushIntDiffOptRleEncoder(e)
 	return e.ToBytes()
 }
@@ -617,15 +624,15 @@ func (e *StringEncoder) Write(str string) {
 		e.sarr = append(e.sarr, e.s)
 		e.s = ""
 	}
-	e.lensE.Write(len(str))
+	e.lensE.Write(uint64(len(str)))
 }
 
-// ToByteArray 将 StringEncoder 的内容转换为 Uint8Array
-func (e *StringEncoder) ToByteArray() []byte {
+// ToBytes 将 StringEncoder 的内容转换为 Uint8Array
+func (e *StringEncoder) ToBytes() []byte {
 	encoder := CreateEncoder()
 	e.sarr = append(e.sarr, e.s)
 	e.s = ""
 	encoder.WriteString(strings.Join(e.sarr, ""))
-	encoder.WriteByteArray(e.lensE.ToByteArray())
+	encoder.WriteByteArray(e.lensE.ToBytes())
 	return encoder.ToBytes()
 }

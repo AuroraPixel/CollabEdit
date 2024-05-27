@@ -17,8 +17,8 @@ func NewDSEncoderV1() *DSEncoderV1 {
 	}
 }
 
-// ToByteArray 转换为字节数组
-func (d *DSEncoderV1) ToByteArray() []byte {
+// ToBytes 转换为字节数组
+func (d *DSEncoderV1) ToBytes() []byte {
 	return d.RestEncoder.ToBytes()
 }
 
@@ -118,8 +118,8 @@ func (u *UpdateEncoderV1) WriteKey(key string) {
 
 // DSEncoderV2 结构体
 type DSEncoderV2 struct {
-	restEncoder *core.Encoder
-	dsCurrVal   uint64
+	*core.Encoder
+	dsCurrVal uint64
 }
 
 // 定义错误类型
@@ -130,14 +130,14 @@ var (
 // NewDSEncoderV2 创建一个新的 DSEncoderV2 实例
 func NewDSEncoderV2() *DSEncoderV2 {
 	return &DSEncoderV2{
-		restEncoder: core.CreateEncoder(),
-		dsCurrVal:   0,
+		Encoder:   core.CreateEncoder(),
+		dsCurrVal: 0,
 	}
 }
 
-// ToByteArray 将编码器内容转换为 Uint8Array
-func (d *DSEncoderV2) ToByteArray() []byte {
-	return d.restEncoder.ToBytes()
+// ToBytes 将编码器内容转换为 Uint8Array
+func (d *DSEncoderV2) ToBytes() []byte {
+	return d.Encoder.ToBytes()
 }
 
 // ResetDsCurVal 重置当前值
@@ -149,7 +149,7 @@ func (d *DSEncoderV2) ResetDsCurVal() {
 func (d *DSEncoderV2) WriteDsClock(clock uint64) {
 	diff := clock - d.dsCurrVal
 	d.dsCurrVal = clock
-	d.restEncoder.WriteVarUint(diff)
+	d.WriteVarUint(diff)
 }
 
 // WriteDsLen 写入长度值
@@ -157,7 +157,7 @@ func (d *DSEncoderV2) WriteDsLen(len uint64) {
 	if len == 0 {
 		panic(ErrUnexpectedCase)
 	}
-	d.restEncoder.WriteVarUint(len - 1)
+	d.WriteVarUint(len - 1)
 	d.dsCurrVal += len
 }
 
@@ -181,15 +181,105 @@ type UpdateEncoderV2 struct {
 func NewUpdateEncoderV2() *UpdateEncoderV2 {
 	return &UpdateEncoderV2{
 		DSEncoderV2:       NewDSEncoderV2(),
+		keyClock:          0,
 		keyMap:            make(map[string]uint64),
 		keyClockEncoder:   core.NewIntDiffOptRleEncoder(),
 		clientEncoder:     core.NewUintOptRleEncoder(),
 		leftClockEncoder:  core.NewIntDiffOptRleEncoder(),
 		rightClockEncoder: core.NewIntDiffOptRleEncoder(),
-		infoEncoder:       core.NewRleEncoder(core.Encoder.WriteByte),
+		infoEncoder:       core.NewRleEncoder((*core.Encoder).WriteByte),
 		stringEncoder:     core.NewStringEncoder(),
-		parentInfoEncoder: core.NewRleEncoder(core.Encoder.WriteByte),
+		parentInfoEncoder: core.NewRleEncoder((*core.Encoder).WriteByte),
 		typeRefEncoder:    core.NewUintOptRleEncoder(),
 		lenEncoder:        core.NewUintOptRleEncoder(),
+	}
+}
+
+// ToBytes 将编码器的数据转换为 Uint8Array
+func (e *UpdateEncoderV2) ToBytes() []byte {
+	e.WriteVarUint(0) // 这是一个未来可能使用的功能标志
+	e.WriteVarByteArray(e.keyClockEncoder.ToBytes())
+	e.WriteVarByteArray(e.clientEncoder.ToBytes())
+	e.WriteVarByteArray(e.leftClockEncoder.ToBytes())
+	e.WriteVarByteArray(e.rightClockEncoder.ToBytes())
+	e.WriteVarByteArray(e.infoEncoder.ToBytes())
+	e.WriteVarByteArray(e.stringEncoder.ToBytes())
+	e.WriteVarByteArray(e.parentInfoEncoder.ToBytes())
+	e.WriteVarByteArray(e.typeRefEncoder.ToBytes())
+	e.WriteVarByteArray(e.lenEncoder.ToBytes())
+	e.WriteByteArray(e.Encoder.ToBytes())
+	return e.Encoder.ToBytes()
+}
+
+// WriteLeftID 编码左ID
+func (e *UpdateEncoderV2) WriteLeftID(id ID) {
+	e.clientEncoder.Write(id.client)
+	e.leftClockEncoder.Write(id.clock)
+}
+
+// WriteRightID 编码右ID
+func (e *UpdateEncoderV2) WriteRightID(id ID) {
+	e.clientEncoder.Write(id.client)
+	e.rightClockEncoder.Write(id.clock)
+}
+
+// WriteClient 编码客户端ID
+func (e *UpdateEncoderV2) WriteClient(client uint64) {
+	e.clientEncoder.Write(client)
+}
+
+// WriteInfo 编码信息
+func (e *UpdateEncoderV2) WriteInfo(info byte) {
+	e.infoEncoder.Write(info)
+}
+
+// WriteString 编码字符串
+func (e *UpdateEncoderV2) WriteString(s string) {
+	e.stringEncoder.Write(s)
+}
+
+// WriteParentInfo 编码父信息
+func (e *UpdateEncoderV2) WriteParentInfo(isYKey bool) {
+	if isYKey {
+		e.parentInfoEncoder.Write(1)
+	} else {
+		e.parentInfoEncoder.Write(0)
+	}
+}
+
+// WriteTypeRef 编码类型引用
+func (e *UpdateEncoderV2) WriteTypeRef(info byte) {
+	e.typeRefEncoder.Write(uint64(info))
+}
+
+// WriteLen 编码长度
+func (e *UpdateEncoderV2) WriteLen(len uint64) {
+	e.lenEncoder.Write(len)
+}
+
+// WriteAny 编码任意数据
+func (e *UpdateEncoderV2) WriteAny(any interface{}) {
+	e.Encoder.WriteAny(any)
+}
+
+// WriteBuf 编码缓冲区
+func (e *UpdateEncoderV2) WriteBuf(buf []byte) {
+	e.Encoder.WriteVarByteArray(buf)
+}
+
+// WriteJSON 编码JSON数据
+func (e *UpdateEncoderV2) WriteJSON(embed interface{}) {
+	e.Encoder.WriteAny(embed)
+}
+
+// WriteKey 编码键
+func (e *UpdateEncoderV2) WriteKey(key string) {
+	if clock, exists := e.keyMap[key]; !exists {
+		e.keyClockEncoder.Write(e.keyClock)
+		e.stringEncoder.Write(key)
+		e.keyMap[key] = e.keyClock
+		e.keyClock++
+	} else {
+		e.keyClockEncoder.Write(clock)
 	}
 }
