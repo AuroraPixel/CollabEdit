@@ -5,17 +5,14 @@ import (
 	"CollabEdit/struts"
 )
 
-type Store struct {
-	Clients map[interface{}]interface{}
-}
-
 // Doc 定义Doc结构体
 type Doc struct {
 	core.Observable //继承观察者
 	Gc              bool
 	GcFilter        func(item struts.Item) bool
-	ClientID        string
+	ClientID        uint64
 	Guid            string
 	CollectionID    string
 	Share           map[interface{}]interface{}
+	Store           *StructStore
 }

@@ -3,6 +3,7 @@ package types
 import (
 	"CollabEdit/struts"
 	"CollabEdit/util"
+	"errors"
 	"math"
 	"sync/atomic"
 )
@@ -68,7 +69,8 @@ func MarkPosition(searchMarker *[]*ArraySearchMarker, p *struts.Item, index uint
 }
 
 // FindMarker 查找全局搜索标记
-func FindMarker(y_array AbstractTypeInterface, index uint64) *ArraySearchMarker {
+func FindMarker(ab *AbstractTypeInterface, index uint64) *ArraySearchMarker {
+	y_array := *ab
 	p := y_array.GetStart()
 	y_searchMarker := y_array.GetSearchMarker()
 	if p == nil || index == 0 || y_searchMarker == nil {
@@ -596,4 +598,100 @@ func typeListForEachSnapshot(a *AbstractTypeInterface, f func(interface{}, int, 
 		// 移动到下一个节点
 		n = n.Right
 	}
+}
+
+// typeListGet 获取指定索引的元素
+func typeListGet(a *AbstractTypeInterface, index uint64) interface{} {
+	// 查找指定索引的标记位置
+	marker := FindMarker(a, index)
+	t := *a
+	n := t.GetStart()
+	if marker != nil {
+		n = marker.P
+		index -= marker.Index
+	}
+	// 遍历链表，找到指定索引的元素
+	for n != nil {
+		if !n.Deleted() && n.Countable() {
+			if index < n.Length {
+				return n.Content.GetContent()[index]
+			}
+			index -= n.Length
+		}
+		n = n.Right
+	}
+	return nil // 如果未找到，返回 nil
+}
+
+// typeListInsertGenericsAfter 在链表中插入多种类型的内容
+func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractTypeInterface, referenceItem *struts.Item, content []interface{}) error {
+	left := referenceItem
+	doc := transaction.Doc
+	ownClientId := doc.ClientID
+	store := doc.Store
+	parent := *ab
+	right := parent.GetStart()
+	if referenceItem != nil {
+		right = referenceItem.Right
+	}
+
+	var jsonContent []interface{}
+	packJsonContent := func() {
+		if len(jsonContent) > 0 {
+			clock := util.GetState(store, ownClientId)
+			id := util.NewID(ownClientId, clock)
+			left = struts.NewItem(id, left,left&&left.)
+			left.integrate(transaction, 0)
+			jsonContent = nil
+		}
+	}
+
+	for _, c := range content {
+		if c == nil {
+			jsonContent = append(jsonContent, c)
+		} else {
+			switch c.(type) {
+			case float64, int, map[string]interface{}, bool, []interface{}, string:
+				jsonContent = append(jsonContent, c)
+			default:
+				packJsonContent()
+				switch v := c.(type) {
+				case []byte:
+					left = &Item{
+						id:      createID(ownClientId, getState(store, ownClientId)),
+						left:    left,
+						lastId:  leftID(left),
+						right:   right,
+						parent:  parent,
+						content: &ContentBinary{data: v},
+					}
+					left.integrate(transaction, 0)
+				case *Doc:
+					left = &Item{
+						id:      createID(ownClientId, getState(store, ownClientId)),
+						left:    left,
+						lastId:  leftID(left),
+						right:   right,
+						parent:  parent,
+						content: &ContentType{data: v},
+					}
+					left.integrate(transaction, 0)
+				case *AbstractType:
+					left = &Item{
+						id:      createID(ownClientId, getState(store, ownClientId)),
+						left:    left,
+						lastId:  leftID(left),
+						right:   right,
+						parent:  parent,
+						content: &ContentType{data: v},
+					}
+					left.integrate(transaction, 0)
+				default:
+					return errors.New("unexpected content type in insert operation")
+				}
+			}
+		}
+	}
+	packJsonContent()
+	return nil
 }

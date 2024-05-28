@@ -5,6 +5,8 @@ import (
 )
 
 type AbstractStructInterface interface {
+	GetID() *util.ID                                                  //获取ID
+	GetLength() uint64                                                //获取长度
 	Deleted() bool                                                    //删除
 	MergeWith(right *AbstractStruct) bool                             //合并
 	Write(encoder util.EncoderInterface, offset int, encodingRef int) //写入
@@ -22,6 +24,16 @@ func NewAbstractStruct(id *util.ID, length uint64) *AbstractStruct {
 		ID:     id,
 		Length: length,
 	}
+}
+
+// GetID 获取ID
+func (a *AbstractStruct) GetID() *util.ID {
+	return a.ID
+}
+
+// GetLength 获取长度
+func (a *AbstractStruct) GetLength() uint64 {
+	return a.Length
 }
 
 // Deleted 获取Deleted属性
