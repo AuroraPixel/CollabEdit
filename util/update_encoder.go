@@ -66,14 +66,14 @@ func NewUpdateEncoderV1() *UpdateEncoderV1 {
 
 // WriteLeftID 写入左侧 ID
 func (u *UpdateEncoderV1) WriteLeftID(id ID) {
-	u.WriteVarUint(id.client)
-	u.WriteVarUint(id.clock)
+	u.WriteVarUint(id.Client)
+	u.WriteVarUint(id.Clock)
 }
 
 // WriteRightID 写入右侧 ID
 func (u *UpdateEncoderV1) WriteRightID(id ID) {
-	u.WriteVarUint(id.client)
-	u.WriteVarUint(id.clock)
+	u.WriteVarUint(id.Client)
+	u.WriteVarUint(id.Clock)
 }
 
 // WriteClient 写入客户端 ID
@@ -228,14 +228,14 @@ func (e *UpdateEncoderV2) ToBytes() []byte {
 
 // WriteLeftID 编码左ID
 func (e *UpdateEncoderV2) WriteLeftID(id ID) {
-	e.clientEncoder.Write(id.client)
-	e.leftClockEncoder.Write(id.clock)
+	e.clientEncoder.Write(id.Client)
+	e.leftClockEncoder.Write(id.Clock)
 }
 
 // WriteRightID 编码右ID
 func (e *UpdateEncoderV2) WriteRightID(id ID) {
-	e.clientEncoder.Write(id.client)
-	e.rightClockEncoder.Write(id.clock)
+	e.clientEncoder.Write(id.Client)
+	e.rightClockEncoder.Write(id.Clock)
 }
 
 // WriteClient 编码客户端ID

@@ -8,6 +8,9 @@ import (
 // BIT3 定义 BIT3 常量，表示二进制的第3位
 const BIT3 = 1 << 3
 
+// BIT2 定义位掩码常量
+const BIT2 = 1 << 1
+
 type Item struct {
 	AbstractStruct
 	Origin      *util.ID                     //最开始的元素
@@ -25,6 +28,11 @@ type Item struct {
 // Deleted 方法返回此项是否被删除
 func (i *Item) Deleted() bool {
 	return (i.Info & BIT3) > 0
+}
+
+// Countable 方法返回此项是否可计数
+func (i *Item) Countable() bool {
+	return (i.Info & BIT2) > 0
 }
 
 type AbstractContent struct {

@@ -13,11 +13,11 @@ type AbstractStructInterface interface {
 
 type AbstractStruct struct {
 	ID     *util.ID //id
-	Length int      //长度
+	Length uint64   //长度
 }
 
 // NewAbstractStruct 创建抽象体
-func NewAbstractStruct(id *util.ID, length int) *AbstractStruct {
+func NewAbstractStruct(id *util.ID, length uint64) *AbstractStruct {
 	return &AbstractStruct{
 		ID:     id,
 		Length: length,
