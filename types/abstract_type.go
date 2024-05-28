@@ -576,3 +576,24 @@ func typeListCreateIterator(a *AbstractTypeInterface) <-chan interface{} {
 	}()
 	return ch
 }
+
+// typeListForEachSnapshot 在每个元素上执行一次提供的函数，操作在文档的快照状态上
+func typeListForEachSnapshot(a *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface), snapshot *util.Snapshot) {
+	t := *a
+	index := 0
+	n := t.GetStart()
+	for n != nil {
+		// 如果节点是可计数的且在快照中可见
+		if n.Countable() && IsVisible(n, snapshot) {
+			// 获取节点的内容
+			c := n.Content.GetContent()
+			// 对内容中的每个元素执行提供的函数
+			for i := 0; i < len(c); i++ {
+				f(c[i], index, &t)
+				index++
+			}
+		}
+		// 移动到下一个节点
+		n = n.Right
+	}
+}
