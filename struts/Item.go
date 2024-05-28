@@ -37,3 +37,7 @@ func (i *Item) Countable() bool {
 
 type AbstractContent struct {
 }
+
+func (a *AbstractContent) GetContent() []interface{} {
+	panic(util.ErrMethodUnimplemented)
+}

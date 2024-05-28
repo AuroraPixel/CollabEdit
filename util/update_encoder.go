@@ -3,7 +3,6 @@ package util
 import (
 	"CollabEdit/core"
 	"encoding/json"
-	"errors"
 )
 
 type EncoderInterface interface {
@@ -136,11 +135,6 @@ type DSEncoderV2 struct {
 	*core.Encoder
 	dsCurrVal uint64
 }
-
-// 定义错误类型
-var (
-	ErrUnexpectedCase = errors.New("未知异常")
-)
 
 // NewDSEncoderV2 创建一个新的 DSEncoderV2 实例
 func NewDSEncoderV2() *DSEncoderV2 {

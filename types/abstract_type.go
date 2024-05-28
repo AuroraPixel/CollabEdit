@@ -3,7 +3,6 @@ package types
 import (
 	"CollabEdit/struts"
 	"CollabEdit/util"
-	"errors"
 	"math"
 	"sync/atomic"
 )
@@ -187,12 +186,6 @@ func CallTypeObservers(typeInstance AbstractTypeInterface, transaction *util.Tra
 	handler.CallEvents(event, transaction)
 }
 
-// 定义错误类型
-var (
-	ErrMethodUnimplemented = errors.New("方法没有被实现")
-	ErrTypeConversion      = errors.New("类型转换错误")
-)
-
 // AbstractTypeInterface 接口定义
 type AbstractTypeInterface interface {
 	SetItem(item *struts.Item)                                                   // SetItem 设置项目
@@ -328,13 +321,13 @@ func (a *AbstractType) Integrate(y *util.Doc, item *struts.Item) {
 // Copy 方法返回此数据类型的副本
 func (a *AbstractType) Copy() AbstractTypeInterface {
 	// 抛出未实现方法错误
-	panic(ErrMethodUnimplemented)
+	panic(util.ErrMethodUnimplemented)
 }
 
 // Clone 方法返回此数据类型的副本
 func (a *AbstractType) Clone() AbstractTypeInterface {
 	// 抛出未实现方法错误
-	panic(ErrMethodUnimplemented)
+	panic(util.ErrMethodUnimplemented)
 }
 
 // Write 方法将此类型写入编码器
@@ -371,7 +364,7 @@ func (a *AbstractType) Observe(f func(eventType *interface{}, transaction *util.
 		transaction, ok2 := arg1.(*util.Transaction)
 
 		if !ok1 || !ok2 {
-			panic(ErrMethodUnimplemented)
+			panic(util.ErrTypeConversion)
 		}
 
 		f(eventType, transaction)
@@ -386,7 +379,7 @@ func (a *AbstractType) ObserveDeep(f func(events []*util.YEvent, transaction *ut
 		events, ok1 := arg0.([]*util.YEvent)
 		transaction, ok2 := arg1.(*util.Transaction)
 		if !ok1 || !ok2 {
-			panic(ErrMethodUnimplemented)
+			panic(util.ErrTypeConversion)
 		}
 		f(events, transaction)
 	}
@@ -401,7 +394,7 @@ func (a *AbstractType) Unobserve(f func(eventType *interface{}, transaction *uti
 		events, ok1 := arg0.(*interface{})
 		transaction, ok2 := arg1.(*util.Transaction)
 		if !ok1 || !ok2 {
-			panic(ErrTypeConversion)
+			panic(util.ErrTypeConversion)
 		}
 		f(events, transaction)
 	}
@@ -415,7 +408,7 @@ func (a *AbstractType) UnobserveDeep(f func(events []*util.YEvent, transaction *
 		events, ok1 := arg0.([]*util.YEvent)
 		transaction, ok2 := arg1.(*util.Transaction)
 		if !ok1 || !ok2 {
-			panic(ErrTypeConversion)
+			panic(util.ErrTypeConversion)
 		}
 		f(events, transaction)
 	}
@@ -425,5 +418,161 @@ func (a *AbstractType) UnobserveDeep(f func(events []*util.YEvent, transaction *
 // ToJSON 方法返回此类型的 JSON 表示
 func (a *AbstractType) ToJSON() interface{} {
 	// 抛出未实现方法错误
-	panic(ErrMethodUnimplemented)
+	panic(util.ErrMethodUnimplemented)
+}
+
+// TypeListSlice 获取指定范围的节点内容
+func TypeListSlice(a *AbstractTypeInterface, start, end uint64) []interface{} {
+	// 如果 start 为负数，则从链表长度中加上 start
+	t := *a
+	if start < 0 {
+		start = t.GetLength() + start
+	}
+	// 如果 end 为负数，则从链表长度中加上 end
+	if end < 0 {
+		end = t.GetLength() + end
+	}
+	// 计算要获取的节点数
+	lenth := end - start
+	// 定义一个切片来存储结果
+	cs := []interface{}{}
+	// 从链表的开始节点开始遍历
+	n := t.GetStart()
+	// 遍历链表，直到节点为空或要获取的节点数为零
+	for n != nil && lenth > 0 {
+		// 如果节点是可计数的且未被删除
+		if n.Countable() && !n.Deleted() {
+			// 获取节点的内容
+			c := n.Content.GetContent()
+			// 如果内容长度小于等于 start，则减少 start 的值
+			if uint64(len(c)) <= start {
+				start -= uint64(len(c))
+			} else {
+				// 否则，将内容添加到结果切片中
+				for i := start; i < uint64(len(c)) && lenth > 0; i++ {
+					cs = append(cs, c[i])
+					lenth--
+				}
+				// 重置 start 的值
+				start = 0
+			}
+		}
+		// 移动到下一个节点
+		n = n.Right
+	}
+	// 返回结果切片
+	return cs
+}
+
+// TypeListToArray 获取类型的所有子节点内容并转换为数组
+func TypeListToArray(a *AbstractTypeInterface) []interface{} {
+	t := *a
+	cs := []interface{}{}
+	n := t.GetStart()
+	for n != nil {
+		if n.Countable() && !n.Deleted() {
+			c := n.Content.GetContent()
+			for _, item := range c {
+				cs = append(cs, item)
+			}
+		}
+		n = n.Right
+	}
+	return cs
+}
+
+// IsVisible 函数检查节点是否在给定快照中可见
+func IsVisible(item *struts.Item, snapshot *util.Snapshot) bool {
+	if snapshot == nil {
+		return !item.Deleted()
+	}
+	client, exists := snapshot.Sv[item.ID.Client]
+	return exists && client > item.ID.Clock && !snapshot.Ds.IsDeleted(item.ID)
+}
+
+// TypeListToArraySnapshot 获取类型的所有子节点内容并转换为数组，考虑快照
+func TypeListToArraySnapshot(a *AbstractTypeInterface, snapshot *util.Snapshot) []interface{} {
+	t := *a
+	var cs []interface{}
+	n := t.GetStart()
+	for n != nil {
+		if n.Countable() && IsVisible(n, snapshot) {
+			c := n.Content.GetContent()
+			for _, item := range c {
+				cs = append(cs, item)
+			}
+		}
+		n = n.Right
+	}
+	return cs
+}
+
+// TypeListForEach 在每个元素上执行一次提供的函数
+func TypeListForEach(a *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface)) {
+	t := *a
+	index := 0
+	n := t.GetStart()
+	for n != nil {
+		if n.Countable() && !n.Deleted() {
+			// 获取节点的内容
+			c := n.Content.GetContent()
+			// 对内容中的每个元素执行提供的函数
+			for i := 0; i < len(c); i++ {
+				f(c[i], index, &t)
+				index++
+			}
+		}
+		// 移动到下一个节点
+		n = n.Right
+	}
+}
+
+// TypeListMap 将函数应用于每个元素并返回结果数组
+func TypeListMap(t *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface) interface{}) []interface{} {
+	var result []interface{}
+	a := func(c interface{}, i int, t *AbstractTypeInterface) {
+		result = append(result, f(c, i, t))
+	}
+	TypeListForEach(t, a)
+	return result
+}
+
+// typeListCreateIterator 创建一个迭代器
+func typeListCreateIterator(a *AbstractTypeInterface) <-chan interface{} {
+	t := *a
+	ch := make(chan interface{})
+	go func() {
+		defer close(ch)
+		n := t.GetStart()
+		var currentContent []interface{}
+		var currentContentIndex int
+
+		for {
+			// 查找一些内容
+			if currentContent == nil {
+				// 跳过被删除的节点
+				for n != nil && n.Deleted() {
+					n = n.Right
+				}
+				// 检查是否到达末尾
+				if n == nil {
+					return
+				}
+				// 找到未删除的节点，设置 currentContent
+				currentContent = n.Content.GetContent()
+				currentContentIndex = 0
+				n = n.Right // 使用了节点的内容，现在迭代到下一个节点
+			}
+
+			// 获取当前内容并发送到通道
+			ch <- currentContent[currentContentIndex]
+			currentContentIndex++
+
+			// 检查是否需要清空 currentContent
+			if len(currentContent) <= currentContentIndex {
+				currentContent = nil
+			}
+		}
+	}()
+	return ch
 }

@@ -26,7 +26,7 @@ func NewAbstractStruct(id *util.ID, length uint64) *AbstractStruct {
 
 // Deleted 获取Deleted属性
 func (a *AbstractStruct) Deleted() bool {
-	panic("method Deleted is not implemented")
+	panic(util.ErrMethodUnimplemented)
 }
 
 // MergeWith 将当前结构与右侧的项合并
@@ -38,10 +38,10 @@ func (a *AbstractStruct) MergeWith(right *AbstractStruct) bool {
 
 // Write 将数据写入编码器
 func (a *AbstractStruct) Write(encoder util.EncoderInterface, offset int, encodingRef int) {
-	panic("method Write is not implemented")
+	panic(util.ErrMethodUnimplemented)
 }
 
 // Integrate 将结构整合到事务中
 func (a *AbstractStruct) Integrate(transaction interface{}, offset int) {
-	panic("method Integrate is not implemented")
+	panic(util.ErrMethodUnimplemented)
 }
