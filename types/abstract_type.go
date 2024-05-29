@@ -17,12 +17,12 @@ var globalSearchMarkerTimestamp uint64 = 0
 // ArraySearchMarker 全局搜索标记
 type ArraySearchMarker struct {
 	P         *struts.Item
-	Index     uint64
+	Index     int
 	Timestamp uint64
 }
 
 // NewArraySearchMarker 全局搜索标记
-func NewArraySearchMarker(p *struts.Item, index uint64) *ArraySearchMarker {
+func NewArraySearchMarker(p *struts.Item, index int) *ArraySearchMarker {
 	p.Marker = true
 	timestamp := atomic.AddUint64(&globalSearchMarkerTimestamp, 1)
 	return &ArraySearchMarker{
@@ -38,7 +38,7 @@ func (asm *ArraySearchMarker) RefreshMarkerTimestamp() {
 }
 
 // OverwriteMarker 覆盖ArraySearchMarker内容
-func (asm *ArraySearchMarker) OverwriteMarker(p *struts.Item, index uint64) {
+func (asm *ArraySearchMarker) OverwriteMarker(p *struts.Item, index int) {
 	asm.P.Marker = false                                              //旧的item中取消标记
 	asm.P = p                                                         //更新为新的item
 	p.Marker = true                                                   //新的item并改为标记状态
@@ -47,7 +47,7 @@ func (asm *ArraySearchMarker) OverwriteMarker(p *struts.Item, index uint64) {
 }
 
 // MarkPosition 标记位置
-func MarkPosition(searchMarker *[]*ArraySearchMarker, p *struts.Item, index uint64) *ArraySearchMarker {
+func MarkPosition(searchMarker *[]*ArraySearchMarker, p *struts.Item, index int) *ArraySearchMarker {
 	if len(*searchMarker) >= maxSearchMarker {
 		// 覆盖最旧的标记
 		var oldestMarker *ArraySearchMarker
@@ -69,8 +69,7 @@ func MarkPosition(searchMarker *[]*ArraySearchMarker, p *struts.Item, index uint
 }
 
 // FindMarker 查找全局搜索标记
-func FindMarker(ab *AbstractTypeInterface, index uint64) *ArraySearchMarker {
-	y_array := *ab
+func FindMarker(y_array AbstractTypeInterface, index int) *ArraySearchMarker {
 	p := y_array.GetStart()
 	y_searchMarker := y_array.GetSearchMarker()
 	if p == nil || index == 0 || y_searchMarker == nil {
@@ -87,7 +86,7 @@ func FindMarker(ab *AbstractTypeInterface, index uint64) *ArraySearchMarker {
 			}
 		}
 	}
-	p_index := uint64(0)
+	p_index := 0
 	if marker != nil {
 		p = marker.P
 		p_index = marker.Index
@@ -120,7 +119,7 @@ func FindMarker(ab *AbstractTypeInterface, index uint64) *ArraySearchMarker {
 			p_index -= p.Length
 		}
 	}
-	parent := *p.Parent
+	parent := p.Parent
 	if marker != nil && math.Abs(float64(marker.Index-p_index)) < float64(parent.GetLength())/maxSearchMarker {
 		// 调整现有标记
 		marker.OverwriteMarker(p, p_index)
@@ -132,7 +131,7 @@ func FindMarker(ab *AbstractTypeInterface, index uint64) *ArraySearchMarker {
 }
 
 // UpdateMarkerChanges 更新标记位置
-func UpdateMarkerChanges(searchMarker []*ArraySearchMarker, index, length uint64) {
+func UpdateMarkerChanges(searchMarker []*ArraySearchMarker, index, length int) {
 	for i := len(searchMarker) - 1; i >= 0; i-- {
 		m := searchMarker[i]
 		if length > 0 {
@@ -154,7 +153,7 @@ func UpdateMarkerChanges(searchMarker []*ArraySearchMarker, index, length uint64
 			p.Marker = true
 		}
 		if index < m.Index || (length > 0 && index == m.Index) {
-			m.Index = uint64(math.Max(float64(m.Index), float64(index+length)))
+			m.Index = int(math.Max(float64(m.Index), float64(index+length)))
 		}
 	}
 }
@@ -182,7 +181,7 @@ func CallTypeObservers(typeInstance AbstractTypeInterface, transaction *util.Tra
 		if typeInstance.GetItem() == nil {
 			break
 		}
-		typeInstance = *typeInstance.GetItem().Parent
+		typeInstance = typeInstance.GetItem().Parent
 	}
 	handler := changedType.GetHandler()
 	handler.CallEvents(event, transaction)
@@ -194,15 +193,15 @@ type AbstractTypeInterface interface {
 	GetItem() *struts.Item                                                       // GetItem 获取项目
 	SetStart(start *struts.Item)                                                 // SetStart 设置开始项目
 	GetStart() *struts.Item                                                      // GetStart 获取开始项目
-	SetLength(length uint64)                                                     // SetLength 设置长度
-	GetLength() uint64                                                           // GetLength 获取长度
+	SetLength(length int)                                                        // SetLength 设置长度
+	GetLength() int                                                              // GetLength 获取长度
 	SetHandler(handler *util.EventHandler)                                       // SetHandler 设置观察者
 	GetHandler() *util.EventHandler                                              // GetHandler 获取观察者
 	SetDeepHandler(handler *util.EventHandler)                                   // SetDeepHandler 设置深度观察者
 	GetDeepHandler() *util.EventHandler                                          // GetDeepHandler 获取深度观察者
 	SetSearchMarker(searchMarker *[]*ArraySearchMarker)                          // SetSearchMarker 设置全局搜索标记
 	GetSearchMarker() *[]*ArraySearchMarker                                      // GetSearchMarker 获取全局搜索标记
-	Parent() *AbstractTypeInterface                                              // Parent 返回父类型
+	Parent() AbstractTypeInterface                                               // Parent 返回父类型
 	Integrate(y *util.Doc, item *struts.Item)                                    // Integrate 将此类型集成到 Yjs 实例中
 	Copy() AbstractTypeInterface                                                 // Copy 返回此数据类型的副本
 	Clone() AbstractTypeInterface                                                // Clone 返回此数据类型的副本
@@ -218,7 +217,7 @@ type AbstractTypeInterface interface {
 
 type AbstractType struct {
 	item         *struts.Item            // item 项目
-	dataMap      map[string]*struts.Item // dataMap 数据映射
+	DataMap      map[string]*struts.Item // DataMap 数据映射
 	start        *struts.Item            // start 开始项目
 	doc          *util.Doc               // doc 文档
 	length       int                     // length 长度
@@ -232,7 +231,7 @@ func NewAbstractType() *AbstractType {
 	// 返回一个新的 AbstractType 实例
 	return &AbstractType{
 		item:         nil,                           // item 设为 nil
-		dataMap:      make(map[string]*struts.Item), // dataMap 初始化为一个空的 map
+		DataMap:      make(map[string]*struts.Item), // DataMap 初始化为一个空的 map
 		start:        nil,                           // start 设为 nil
 		doc:          nil,                           // doc 设为 nil
 		length:       0,                             // length 初始化为 0
@@ -263,13 +262,13 @@ func (a *AbstractType) GetStart() *struts.Item {
 }
 
 // SetLength 设置长度
-func (a *AbstractType) SetLength(length uint64) {
-	a.length = int(length)
+func (a *AbstractType) SetLength(length int) {
+	a.length = length
 }
 
 // GetLength 获取长度
-func (a *AbstractType) GetLength() uint64 {
-	return uint64(a.length)
+func (a *AbstractType) GetLength() int {
+	return a.length
 }
 
 // SetHandler 设置观察者
@@ -303,7 +302,7 @@ func (a *AbstractType) GetSearchMarker() *[]*ArraySearchMarker {
 }
 
 // Parent 方法返回父类型
-func (a *AbstractType) Parent() *AbstractTypeInterface {
+func (a *AbstractType) Parent() AbstractTypeInterface {
 	// 如果 item 不为 nil，则返回 item 的父类型
 	if a.item != nil {
 		return a.item.Parent
@@ -424,9 +423,8 @@ func (a *AbstractType) ToJSON() interface{} {
 }
 
 // TypeListSlice 获取指定范围的节点内容
-func TypeListSlice(a *AbstractTypeInterface, start, end uint64) []interface{} {
+func TypeListSlice(t AbstractTypeInterface, start, end int) []interface{} {
 	// 如果 start 为负数，则从链表长度中加上 start
-	t := *a
 	if start < 0 {
 		start = t.GetLength() + start
 	}
@@ -445,13 +443,14 @@ func TypeListSlice(a *AbstractTypeInterface, start, end uint64) []interface{} {
 		// 如果节点是可计数的且未被删除
 		if n.Countable() && !n.Deleted() {
 			// 获取节点的内容
-			c := n.Content.GetContent()
+			content := n.Content
+			c := content.GetContent()
 			// 如果内容长度小于等于 start，则减少 start 的值
-			if uint64(len(c)) <= start {
-				start -= uint64(len(c))
+			if len(c) <= start {
+				start -= len(c)
 			} else {
 				// 否则，将内容添加到结果切片中
-				for i := start; i < uint64(len(c)) && lenth > 0; i++ {
+				for i := start; i < len(c) && lenth > 0; i++ {
 					cs = append(cs, c[i])
 					lenth--
 				}
@@ -467,13 +466,13 @@ func TypeListSlice(a *AbstractTypeInterface, start, end uint64) []interface{} {
 }
 
 // TypeListToArray 获取类型的所有子节点内容并转换为数组
-func TypeListToArray(a *AbstractTypeInterface) []interface{} {
-	t := *a
+func TypeListToArray(t AbstractTypeInterface) []interface{} {
 	cs := []interface{}{}
 	n := t.GetStart()
 	for n != nil {
 		if n.Countable() && !n.Deleted() {
-			c := n.Content.GetContent()
+			content := n.Content
+			c := content.GetContent()
 			for _, item := range c {
 				cs = append(cs, item)
 			}
@@ -493,13 +492,13 @@ func IsVisible(item *struts.Item, snapshot *util.Snapshot) bool {
 }
 
 // TypeListToArraySnapshot 获取类型的所有子节点内容并转换为数组，考虑快照
-func TypeListToArraySnapshot(a *AbstractTypeInterface, snapshot *util.Snapshot) []interface{} {
-	t := *a
+func TypeListToArraySnapshot(t AbstractTypeInterface, snapshot *util.Snapshot) []interface{} {
 	var cs []interface{}
 	n := t.GetStart()
 	for n != nil {
 		if n.Countable() && IsVisible(n, snapshot) {
-			c := n.Content.GetContent()
+			content := n.Content
+			c := content.GetContent()
 			for _, item := range c {
 				cs = append(cs, item)
 			}
@@ -510,17 +509,17 @@ func TypeListToArraySnapshot(a *AbstractTypeInterface, snapshot *util.Snapshot) 
 }
 
 // TypeListForEach 在每个元素上执行一次提供的函数
-func TypeListForEach(a *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface)) {
-	t := *a
+func TypeListForEach(t AbstractTypeInterface, f func(interface{}, int, AbstractTypeInterface)) {
 	index := 0
 	n := t.GetStart()
 	for n != nil {
 		if n.Countable() && !n.Deleted() {
 			// 获取节点的内容
-			c := n.Content.GetContent()
+			content := n.Content
+			c := content.GetContent()
 			// 对内容中的每个元素执行提供的函数
 			for i := 0; i < len(c); i++ {
-				f(c[i], index, &t)
+				f(c[i], index, t)
 				index++
 			}
 		}
@@ -530,9 +529,9 @@ func TypeListForEach(a *AbstractTypeInterface, f func(interface{}, int, *Abstrac
 }
 
 // TypeListMap 将函数应用于每个元素并返回结果数组
-func TypeListMap(t *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface) interface{}) []interface{} {
+func TypeListMap(t AbstractTypeInterface, f func(interface{}, int, AbstractTypeInterface) interface{}) []interface{} {
 	var result []interface{}
-	a := func(c interface{}, i int, t *AbstractTypeInterface) {
+	a := func(c interface{}, i int, t AbstractTypeInterface) {
 		result = append(result, f(c, i, t))
 	}
 	TypeListForEach(t, a)
@@ -540,8 +539,7 @@ func TypeListMap(t *AbstractTypeInterface, f func(interface{}, int, *AbstractTyp
 }
 
 // typeListCreateIterator 创建一个迭代器
-func typeListCreateIterator(a *AbstractTypeInterface) <-chan interface{} {
-	t := *a
+func typeListCreateIterator(t AbstractTypeInterface) <-chan interface{} {
 	ch := make(chan interface{})
 	go func() {
 		defer close(ch)
@@ -561,7 +559,8 @@ func typeListCreateIterator(a *AbstractTypeInterface) <-chan interface{} {
 					return
 				}
 				// 找到未删除的节点，设置 currentContent
-				currentContent = n.Content.GetContent()
+				content := n.Content
+				currentContent = content.GetContent()
 				currentContentIndex = 0
 				n = n.Right // 使用了节点的内容，现在迭代到下一个节点
 			}
@@ -580,18 +579,18 @@ func typeListCreateIterator(a *AbstractTypeInterface) <-chan interface{} {
 }
 
 // typeListForEachSnapshot 在每个元素上执行一次提供的函数，操作在文档的快照状态上
-func typeListForEachSnapshot(a *AbstractTypeInterface, f func(interface{}, int, *AbstractTypeInterface), snapshot *util.Snapshot) {
-	t := *a
+func typeListForEachSnapshot(t AbstractTypeInterface, f func(interface{}, int, AbstractTypeInterface), snapshot *util.Snapshot) {
 	index := 0
 	n := t.GetStart()
 	for n != nil {
 		// 如果节点是可计数的且在快照中可见
 		if n.Countable() && IsVisible(n, snapshot) {
 			// 获取节点的内容
-			c := n.Content.GetContent()
+			content := n.Content
+			c := content.GetContent()
 			// 对内容中的每个元素执行提供的函数
 			for i := 0; i < len(c); i++ {
-				f(c[i], index, &t)
+				f(c[i], index, t)
 				index++
 			}
 		}
@@ -601,10 +600,9 @@ func typeListForEachSnapshot(a *AbstractTypeInterface, f func(interface{}, int, 
 }
 
 // typeListGet 获取指定索引的元素
-func typeListGet(a *AbstractTypeInterface, index uint64) interface{} {
+func typeListGet(t AbstractTypeInterface, index int) interface{} {
 	// 查找指定索引的标记位置
-	marker := FindMarker(a, index)
-	t := *a
+	marker := FindMarker(t, index)
 	n := t.GetStart()
 	if marker != nil {
 		n = marker.P
@@ -614,7 +612,8 @@ func typeListGet(a *AbstractTypeInterface, index uint64) interface{} {
 	for n != nil {
 		if !n.Deleted() && n.Countable() {
 			if index < n.Length {
-				return n.Content.GetContent()[index]
+				content := n.Content
+				return content.GetContent()[index]
 			}
 			index -= n.Length
 		}
@@ -624,24 +623,32 @@ func typeListGet(a *AbstractTypeInterface, index uint64) interface{} {
 }
 
 // typeListInsertGenericsAfter 在链表中插入多种类型的内容
-func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractTypeInterface, referenceItem *struts.Item, content []interface{}) error {
+func typeListInsertGenericsAfter(transaction *util.Transaction, parent AbstractTypeInterface, referenceItem *struts.Item, content []interface{}) error {
 	left := referenceItem
 	doc := transaction.Doc
 	ownClientId := doc.ClientID
 	store := doc.Store
-	parent := *ab
 	right := parent.GetStart()
 	if referenceItem != nil {
 		right = referenceItem.Right
 	}
 
 	var jsonContent []interface{}
+	var leftID *util.ID
+	if left != nil {
+		leftID = left.LastId()
+	}
+
+	var rightID *util.ID
+	if right != nil {
+		rightID = right.ID
+	}
 	packJsonContent := func() {
 		if len(jsonContent) > 0 {
 			clock := util.GetState(store, ownClientId)
 			id := util.NewID(ownClientId, clock)
-			left = struts.NewItem(id, left,left&&left.)
-			left.integrate(transaction, 0)
+			left = struts.NewItem(id, left, leftID, right, rightID, parent, "", struts.NewContentAny(jsonContent))
+			left.Integrate(transaction, 0)
 			jsonContent = nil
 		}
 	}
@@ -657,16 +664,18 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractType
 				packJsonContent()
 				switch v := c.(type) {
 				case []byte:
-					left = &Item{
-						id:      createID(ownClientId, getState(store, ownClientId)),
-						left:    left,
-						lastId:  leftID(left),
-						right:   right,
-						parent:  parent,
-						content: &ContentBinary{data: v},
-					}
-					left.integrate(transaction, 0)
-				case *Doc:
+					left = struts.NewItem(
+						util.NewID(ownClientId, util.GetState(store, ownClientId)),
+						left,
+						leftID,
+						right,
+						rightID,
+						parent,
+						"",
+						struts.NewContentBinary(convertToByteSlice(jsonContent)),
+					)
+					left.Integrate(transaction, 0)
+				case *util.Doc:
 					left = &Item{
 						id:      createID(ownClientId, getState(store, ownClientId)),
 						left:    left,
@@ -675,7 +684,17 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractType
 						parent:  parent,
 						content: &ContentType{data: v},
 					}
-					left.integrate(transaction, 0)
+
+					left = struts.NewItem(
+						util.NewID(ownClientId, util.GetState(store, ownClientId)),
+						left,
+						leftID,
+						right,
+						rightID,
+						parent,
+					)
+
+					left.Integrate(transaction, 0)
 				case *AbstractType:
 					left = &Item{
 						id:      createID(ownClientId, getState(store, ownClientId)),
@@ -685,7 +704,7 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractType
 						parent:  parent,
 						content: &ContentType{data: v},
 					}
-					left.integrate(transaction, 0)
+					left.Integrate(transaction, 0)
 				default:
 					return errors.New("unexpected content type in insert operation")
 				}
@@ -694,4 +713,12 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, ab *AbstractType
 	}
 	packJsonContent()
 	return nil
+}
+
+func convertToByteSlice(content []interface{}) []byte {
+	byteSlice := make([]byte, len(content))
+	for i, v := range content {
+		byteSlice[i] = v.(byte)
+	}
+	return byteSlice
 }

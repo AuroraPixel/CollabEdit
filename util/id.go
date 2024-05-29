@@ -4,12 +4,12 @@ import "CollabEdit/core"
 
 // ID 结构体定义
 type ID struct {
-	Client uint64 //客户端id
-	Clock  uint64 //每一个客户端连续编号
+	Client int //客户端id
+	Clock  int //每一个客户端连续编号
 }
 
 // NewID 创建一个新的ID实例
-func NewID(client, clock uint64) *ID {
+func NewID(client, clock int) *ID {
 	return &ID{
 		Client: client,
 		Clock:  clock,
@@ -23,13 +23,13 @@ func CompareIDs(a, b *ID) bool {
 
 // WriteID 将ID写入编码器
 func (id *ID) WriteID(encoder core.Encoder) {
-	encoder.WriteVarUint(id.Client)
-	encoder.WriteVarUint(id.Clock)
+	encoder.WriteVarUint(uint(id.Client))
+	encoder.WriteVarUint(uint(id.Clock))
 }
 
 // ReadID 从解码器读取ID
 func (id *ID) ReadID(decoder core.Decoder) *ID {
 	client := decoder.ReadVarUint()
 	clock := decoder.ReadVarUint()
-	return NewID(client, clock)
+	return NewID(int(client), int(clock))
 }

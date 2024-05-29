@@ -8,12 +8,12 @@ import (
 type EncoderInterface interface {
 	WriteLeftID(id ID)           //写入左侧 ID
 	WriteRightID(id ID)          //写入右侧 ID
-	WriteClient(client uint64)   //写入客户端 ID
+	WriteClient(client int)      //写入客户端 ID
 	WriteInfo(info byte)         //写入信息
 	WriteString(s string)        //写入字符串
 	WriteParentInfo(isYKey bool) //写入父信息
 	WriteTypeRef(info byte)      //写入类型引用
-	WriteLen(len uint64)         //写入长度值
+	WriteLen(len int)            //写入长度值
 	WriteAny(any interface{})    //写入任意数据
 	WriteBuf(buf []byte)         //写入缓冲区
 	WriteJSON(embed interface{}) //写入 JSON 数据
@@ -42,13 +42,13 @@ func (d *DSEncoderV1) ResetDsCurVal() {
 }
 
 // WriteDsClock 写入时钟值
-func (d *DSEncoderV1) WriteDsClock(clock uint64) {
-	d.WriteVarUint(clock)
+func (d *DSEncoderV1) WriteDsClock(clock int) {
+	d.WriteVarUint(uint(clock))
 }
 
 // WriteDsLen 写入长度值
-func (d *DSEncoderV1) WriteDsLen(len uint64) {
-	d.WriteVarUint(len)
+func (d *DSEncoderV1) WriteDsLen(len int) {
+	d.WriteVarUint(uint(len))
 }
 
 // UpdateEncoderV1 结构体，继承 DSEncoderV1
@@ -65,19 +65,19 @@ func NewUpdateEncoderV1() *UpdateEncoderV1 {
 
 // WriteLeftID 写入左侧 ID
 func (u *UpdateEncoderV1) WriteLeftID(id ID) {
-	u.WriteVarUint(id.Client)
-	u.WriteVarUint(id.Clock)
+	u.WriteVarUint(uint(id.Client))
+	u.WriteVarUint(uint(id.Clock))
 }
 
 // WriteRightID 写入右侧 ID
 func (u *UpdateEncoderV1) WriteRightID(id ID) {
-	u.WriteVarUint(id.Client)
-	u.WriteVarUint(id.Clock)
+	u.WriteVarUint(uint(id.Client))
+	u.WriteVarUint(uint(id.Clock))
 }
 
 // WriteClient 写入客户端 ID
-func (u *UpdateEncoderV1) WriteClient(client uint64) {
-	u.WriteVarUint(client)
+func (u *UpdateEncoderV1) WriteClient(client int) {
+	u.WriteVarUint(uint(client))
 }
 
 // WriteInfo 写入信息
@@ -101,12 +101,12 @@ func (u *UpdateEncoderV1) WriteParentInfo(isYKey bool) {
 
 // WriteTypeRef 写入类型引用
 func (u *UpdateEncoderV1) WriteTypeRef(info byte) {
-	u.WriteVarUint(uint64(info))
+	u.WriteVarUint(uint(info))
 }
 
 // WriteLen 写入长度值
-func (u *UpdateEncoderV1) WriteLen(len uint64) {
-	u.WriteVarUint(len)
+func (u *UpdateEncoderV1) WriteLen(len int) {
+	u.WriteVarUint(uint(len))
 }
 
 // WriteAny 写入任意数据
@@ -133,7 +133,7 @@ func (u *UpdateEncoderV1) WriteKey(key string) {
 // DSEncoderV2 结构体
 type DSEncoderV2 struct {
 	*core.Encoder
-	dsCurrVal uint64
+	dsCurrVal int
 }
 
 // NewDSEncoderV2 创建一个新的 DSEncoderV2 实例
@@ -155,26 +155,26 @@ func (d *DSEncoderV2) ResetDsCurVal() {
 }
 
 // WriteDsClock 写入时钟值
-func (d *DSEncoderV2) WriteDsClock(clock uint64) {
+func (d *DSEncoderV2) WriteDsClock(clock int) {
 	diff := clock - d.dsCurrVal
 	d.dsCurrVal = clock
-	d.WriteVarUint(diff)
+	d.WriteVarUint(uint(diff))
 }
 
 // WriteDsLen 写入长度值
-func (d *DSEncoderV2) WriteDsLen(len uint64) {
+func (d *DSEncoderV2) WriteDsLen(len int) {
 	if len == 0 {
 		panic(ErrUnexpectedCase)
 	}
-	d.WriteVarUint(len - 1)
+	d.WriteVarUint(uint(len - 1))
 	d.dsCurrVal += len
 }
 
 // UpdateEncoderV2 结构体，继承 DSEncoderV2
 type UpdateEncoderV2 struct {
 	*DSEncoderV2
-	keyMap            map[string]uint64
-	keyClock          uint64
+	keyMap            map[string]int
+	keyClock          int
 	keyClockEncoder   *core.IntDiffOptRleEncoder
 	clientEncoder     *core.UintOptRleEncoder
 	leftClockEncoder  *core.IntDiffOptRleEncoder
@@ -191,7 +191,7 @@ func NewUpdateEncoderV2() *UpdateEncoderV2 {
 	return &UpdateEncoderV2{
 		DSEncoderV2:       NewDSEncoderV2(),
 		keyClock:          0,
-		keyMap:            make(map[string]uint64),
+		keyMap:            make(map[string]int),
 		keyClockEncoder:   core.NewIntDiffOptRleEncoder(),
 		clientEncoder:     core.NewUintOptRleEncoder(),
 		leftClockEncoder:  core.NewIntDiffOptRleEncoder(),
@@ -233,7 +233,7 @@ func (e *UpdateEncoderV2) WriteRightID(id ID) {
 }
 
 // WriteClient 编码客户端ID
-func (e *UpdateEncoderV2) WriteClient(client uint64) {
+func (e *UpdateEncoderV2) WriteClient(client int) {
 	e.clientEncoder.Write(client)
 }
 
@@ -258,11 +258,11 @@ func (e *UpdateEncoderV2) WriteParentInfo(isYKey bool) {
 
 // WriteTypeRef 编码类型引用
 func (e *UpdateEncoderV2) WriteTypeRef(info byte) {
-	e.typeRefEncoder.Write(uint64(info))
+	e.typeRefEncoder.Write(int(info))
 }
 
 // WriteLen 编码长度
-func (e *UpdateEncoderV2) WriteLen(len uint64) {
+func (e *UpdateEncoderV2) WriteLen(len int) {
 	e.lenEncoder.Write(len)
 }
 

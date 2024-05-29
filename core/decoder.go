@@ -109,9 +109,9 @@ func (d *Decoder) PeekUint32() uint32 {
 }
 
 // ReadVarUint 读取变长的无符号整数
-func (d *Decoder) ReadVarUint() uint64 {
-	var num uint64
-	var mult uint64 = 1
+func (d *Decoder) ReadVarUint() uint {
+	var num uint
+	var mult uint = 1
 
 	for {
 		if d.pos >= len(d.arr) {
@@ -119,7 +119,7 @@ func (d *Decoder) ReadVarUint() uint64 {
 		}
 		r := d.arr[d.pos]
 		d.pos++
-		num += uint64(r&0x7F) * mult // 计算当前字节的值
+		num += uint(r&0x7F) * mult // 计算当前字节的值
 		if r < 0x80 {
 			return num // 如果最高位是0，表示结束
 		}
@@ -132,11 +132,11 @@ func (d *Decoder) ReadVarUint() uint64 {
 }
 
 // ReadVarInt 读取变长的有符号整数
-func (d *Decoder) ReadVarInt() int64 {
+func (d *Decoder) ReadVarInt() int {
 	r := d.arr[d.pos]
 	d.pos++
-	num := int64(r & 0x3F)
-	sign := int64((r & 0x40) >> 6)
+	num := int(r & 0x3F)
+	sign := int((r & 0x40) >> 6)
 	if r < 0x80 {
 		if sign == 1 {
 			return -num
@@ -144,14 +144,14 @@ func (d *Decoder) ReadVarInt() int64 {
 		return num
 	}
 
-	mult := int64(64)
+	mult := 64
 	for {
 		if d.pos >= len(d.arr) {
 			panic(ErrUnexpectedEndOfArray) // 如果超出数组长度，则抛出错误
 		}
 		r = d.arr[d.pos]
 		d.pos++
-		num += int64(r&0x7F) * mult
+		num += int(r&0x7F) * mult
 		if r < 0x80 {
 			if sign == 1 {
 				return -num
@@ -167,7 +167,7 @@ func (d *Decoder) ReadVarInt() int64 {
 }
 
 // PeekVarUint 查看变长无符号整数，但不更新位置
-func (d *Decoder) PeekVarUint() uint64 {
+func (d *Decoder) PeekVarUint() uint {
 	pos := d.pos
 	val := d.ReadVarUint()
 	d.pos = pos
@@ -175,7 +175,7 @@ func (d *Decoder) PeekVarUint() uint64 {
 }
 
 // PeekVarInt 查看变长有符号整数，但不更新位置
-func (d *Decoder) PeekVarInt() int64 {
+func (d *Decoder) PeekVarInt() int {
 	pos := d.pos
 	val := d.ReadVarInt()
 	d.pos = pos
@@ -261,7 +261,7 @@ func (d *Decoder) ReadAny() interface{} {
 	case 118:
 		len := d.ReadVarUint()
 		obj := make(map[string]interface{})
-		for i := uint64(0); i < len; i++ {
+		for i := uint(0); i < len; i++ {
 			key := d.ReadVarString()
 			obj[key] = d.ReadAny()
 		}
@@ -269,7 +269,7 @@ func (d *Decoder) ReadAny() interface{} {
 	case 117:
 		len := d.ReadVarUint()
 		arr := make([]interface{}, len)
-		for i := uint64(0); i < len; i++ {
+		for i := uint(0); i < len; i++ {
 			arr[i] = d.ReadAny()
 		}
 		return arr

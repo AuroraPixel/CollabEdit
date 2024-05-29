@@ -6,20 +6,20 @@ import (
 
 type AbstractStructInterface interface {
 	GetID() *util.ID                                                  //获取ID
-	GetLength() uint64                                                //获取长度
+	GetLength() int                                                   //获取长度
 	Deleted() bool                                                    //删除
 	MergeWith(right *AbstractStruct) bool                             //合并
 	Write(encoder util.EncoderInterface, offset int, encodingRef int) //写入
-	Integrate(transaction interface{}, offset int)                    //整合
+	Integrate(transaction *util.Transaction, offset int)              //整合
 }
 
 type AbstractStruct struct {
 	ID     *util.ID //id
-	Length uint64   //长度
+	Length int      //长度
 }
 
 // NewAbstractStruct 创建抽象体
-func NewAbstractStruct(id *util.ID, length uint64) *AbstractStruct {
+func NewAbstractStruct(id *util.ID, length int) *AbstractStruct {
 	return &AbstractStruct{
 		ID:     id,
 		Length: length,
@@ -32,7 +32,7 @@ func (a *AbstractStruct) GetID() *util.ID {
 }
 
 // GetLength 获取长度
-func (a *AbstractStruct) GetLength() uint64 {
+func (a *AbstractStruct) GetLength() int {
 	return a.Length
 }
 
@@ -54,6 +54,6 @@ func (a *AbstractStruct) Write(encoder util.EncoderInterface, offset int, encodi
 }
 
 // Integrate 将结构整合到事务中
-func (a *AbstractStruct) Integrate(transaction interface{}, offset int) {
+func (a *AbstractStruct) Integrate(transaction *util.Transaction, offset int) {
 	panic(util.ErrMethodUnimplemented)
 }

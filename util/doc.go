@@ -10,7 +10,7 @@ type Doc struct {
 	core.Observable //继承观察者
 	Gc              bool
 	GcFilter        func(item struts.Item) bool
-	ClientID        uint64
+	ClientID        int
 	Guid            string
 	CollectionID    string
 	Share           map[interface{}]interface{}

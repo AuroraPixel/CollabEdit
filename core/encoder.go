@@ -130,29 +130,54 @@ func (e *Encoder) SetUint32(pos int, num uint32) {
 }
 
 // WriteVarUint 写入一个变长无符号整数
-func (e *Encoder) WriteVarUint(num uint64) {
+func (e *Encoder) WriteVarUint(num uint) {
 	for num > 0x7F {
 		e.Write(byte(0x80 | (num & 0x7F)))
 		num >>= 7
 	}
-	e.Write(byte(num))
+	e.Write(byte(num & 0x7F)) // 这里确保只写入低7位
 }
 
 // WriteVarInt 写入一个变长整数
-func (e *Encoder) WriteVarInt(num int64) {
+func (e *Encoder) WriteVarInt(num int) {
 	isNegative := num < 0
 	if isNegative {
 		num = -num
 	}
-	for num > 0x3F {
-		e.Write(byte(0x80 | (num & 0x3F) | (boolToByte(isNegative) << 6)))
-		num >>= 6
+
+	var b byte
+	if num > 0x3F {
+		b = 0x80
+	} else {
+		b = 0x00
 	}
-	e.Write(byte(num | (boolToByte(isNegative) << 6)))
+
+	if isNegative {
+		b |= 0x40
+	}
+
+	b |= byte(num & 0x3F)
+	e.Write(b)
+
+	num >>= 6 // 右移 6 位
+
+	// 我们不需要考虑 num === 0 的情况，因此可以使用不同的模式
+	for num > 0 {
+		if num > 0x7F {
+			b = 0x80
+		} else {
+			b = 0x00
+		}
+
+		b |= byte(num & 0x7F)
+		e.Write(b)
+
+		num >>= 7 // 右移 7 位
+	}
 }
 
 // 将布尔值转换为字节
-func boolToByte(b bool) int64 {
+func boolToByte(b bool) byte {
 	if b {
 		return 1
 	}
@@ -186,7 +211,7 @@ func (e *Encoder) WriteByteArray(byteArr []byte) {
 
 // WriteVarByteArray 写入一个可变长度的 Uint8Array
 func (e *Encoder) WriteVarByteArray(uint8Array []byte) {
-	e.WriteVarUint(uint64(len(uint8Array))) // 先写入字节数组的长度
+	e.WriteVarUint((uint)(len(uint8Array))) // 先写入字节数组的长度
 	e.WriteByteArray(uint8Array)            // 然后写入字节数组本身
 }
 
@@ -210,7 +235,7 @@ func (e *Encoder) WriteString(str string) {
 	if len(str) < maxStrBSize {
 		// 可以将字符串编码到现有的缓冲区中
 		written := copy(strBuffer, []byte(str))
-		e.WriteVarUint(uint64(written))
+		e.WriteVarUint(uint(written))
 		for i := 0; i < written; i++ {
 			e.Write(strBuffer[i])
 		}
@@ -309,10 +334,10 @@ func (e *Encoder) WriteAny(data interface{}) {
 		e.Write(119)
 		e.WriteString(v)
 	case int, int32, int64:
-		if v.(int64) <= math.MaxInt32 && v.(int64) >= math.MinInt32 {
+		if v.(int) <= math.MaxInt32 && v.(int) >= math.MinInt32 {
 			// TYPE 125: INTEGER
 			e.Write(125)
-			e.WriteVarInt(v.(int64))
+			e.WriteVarInt(v.(int))
 		} else {
 			// TYPE 122: BigInt
 			e.Write(122)
@@ -340,7 +365,7 @@ func (e *Encoder) WriteAny(data interface{}) {
 	case []interface{}:
 		// TYPE 117: Array
 		e.Write(117)
-		e.WriteVarUint(uint64(len(v)))
+		e.WriteVarUint(uint(len(v)))
 		for _, elem := range v {
 			e.WriteAny(elem)
 		}
@@ -352,7 +377,7 @@ func (e *Encoder) WriteAny(data interface{}) {
 		// TYPE 118: Object
 		e.Write(118)
 		keys := reflect.ValueOf(data).MapKeys()
-		e.WriteVarUint(uint64(len(keys)))
+		e.WriteVarUint(uint(len(keys)))
 		for _, key := range keys {
 			e.WriteString(key.String())
 			e.WriteAny(v[key.String()])
@@ -393,7 +418,7 @@ func (e *RleEncoder) Write(v interface{}) {
 		e.count++
 	} else {
 		if e.count > 0 {
-			e.WriteVarUint(uint64(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
+			e.WriteVarUint(uint(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
 		}
 		e.count = 1
 		//e.w(e.Encoder, v)
@@ -418,7 +443,7 @@ func NewIntDiffEncoder(start int) *IntDiffEncoder {
 
 // Write 向 IntDiffEncoder 写入一个值
 func (e *IntDiffEncoder) Write(v int) {
-	e.WriteVarInt(int64(v - e.s))
+	e.WriteVarInt(v - e.s)
 	e.s = v
 }
 
@@ -444,10 +469,10 @@ func (e *RleIntDiffEncoder) Write(v int) {
 		e.count++
 	} else {
 		if e.count > 0 {
-			e.WriteVarUint(uint64(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
+			e.WriteVarUint(uint(e.count - 1)) // 因为 count 总是 > 0，所以可以减去一个。非标准编码
 		}
 		e.count = 1
-		e.WriteVarInt(int64(v - e.s))
+		e.WriteVarInt(v - e.s)
 		e.s = v
 	}
 }
@@ -455,7 +480,7 @@ func (e *RleIntDiffEncoder) Write(v int) {
 // UintOptRleEncoder 结构体
 type UintOptRleEncoder struct {
 	*Encoder
-	s     uint64
+	s     int
 	count int
 }
 
@@ -469,7 +494,7 @@ func NewUintOptRleEncoder() *UintOptRleEncoder {
 }
 
 // Write 向 UintOptRleEncoder 写入一个值
-func (e *UintOptRleEncoder) Write(v uint64) {
+func (e *UintOptRleEncoder) Write(v int) {
 	if e.s == v {
 		e.count++
 	} else {
@@ -488,15 +513,15 @@ func (e *UintOptRleEncoder) ToBytes() []byte {
 // flushUintOptRleEncoder 刷新 UintOptRleEncoder 的状态
 func flushUintOptRleEncoder(e *UintOptRleEncoder) {
 	if e.count > 0 {
-		var s uint64
+		var s int
 		if e.count == 1 {
 			s = e.s
 		} else {
 			s = -e.s
 		}
-		e.WriteVarInt(int64(s))
+		e.WriteVarInt(s)
 		if e.count > 1 {
-			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+			e.WriteVarUint(uint(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
 		}
 	}
 }
@@ -526,9 +551,9 @@ func flushIncUintOptRleEncoder(e *IncUintOptRleEncoder) {
 		} else {
 			s = -e.s
 		}
-		e.WriteVarInt(int64(s))
+		e.WriteVarInt(s)
 		if e.count > 1 {
-			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+			e.WriteVarUint(uint(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
 		}
 	}
 }
@@ -553,9 +578,9 @@ func (e *IncUintOptRleEncoder) ToBytes() []byte {
 // IntDiffOptRleEncoder 结构体
 type IntDiffOptRleEncoder struct {
 	*Encoder
-	s     uint64
+	s     int
 	count int
-	diff  uint64
+	diff  int
 }
 
 // NewIntDiffOptRleEncoder 创建一个新的 IntDiffOptRleEncoder 实例
@@ -569,7 +594,7 @@ func NewIntDiffOptRleEncoder() *IntDiffOptRleEncoder {
 }
 
 // Write 向 IntDiffOptRleEncoder 写入一个值
-func (e *IntDiffOptRleEncoder) Write(v uint64) {
+func (e *IntDiffOptRleEncoder) Write(v int) {
 	if e.diff == v-e.s {
 		e.s = v
 		e.count++
@@ -594,9 +619,9 @@ func flushIntDiffOptRleEncoder(e *IntDiffOptRleEncoder) {
 		if e.count == 1 {
 			encodedDiff = e.diff*2 + 0
 		}
-		e.WriteVarInt(int64(encodedDiff))
+		e.WriteVarInt(encodedDiff)
 		if e.count > 1 {
-			e.WriteVarUint(uint64(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
+			e.WriteVarUint(uint(e.count - 2)) // 因为 count 总是 > 1，所以可以减去一个。非标准编码
 		}
 	}
 }
@@ -624,7 +649,7 @@ func (e *StringEncoder) Write(str string) {
 		e.sarr = append(e.sarr, e.s)
 		e.s = ""
 	}
-	e.lensE.Write(uint64(len(str)))
+	e.lensE.Write(len(str))
 }
 
 // ToBytes 将 StringEncoder 的内容转换为 Uint8Array

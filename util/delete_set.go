@@ -3,12 +3,12 @@ package util
 import "math"
 
 type DeleteItem struct {
-	Clock uint64
-	Len   uint64
+	Clock int
+	Len   int
 }
 
 type DeleteSet struct {
-	Clients map[uint64]*[]DeleteItem
+	Clients map[int]*[]DeleteItem
 }
 
 // IsDeleted 函数检查节点是否被删除
@@ -18,7 +18,7 @@ func (ds *DeleteSet) IsDeleted(id *ID) bool {
 }
 
 // FindIndexDS 在删除项数组中查找指定时钟的位置
-func FindIndexDS(dis *[]DeleteItem, clock uint64) *int {
+func FindIndexDS(dis *[]DeleteItem, clock int) *int {
 	left := 0
 	right := len(*dis) - 1
 	for left <= right {
