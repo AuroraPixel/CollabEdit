@@ -689,7 +689,7 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, parent AbstractT
 					)
 					left.Integrate(transaction, 0)
 					break
-				case *util.Doc:
+				case util.Doc:
 					left = struts.NewItem(
 						util.NewID(ownClientId, util.GetState(store, ownClientId)),
 						left,
@@ -702,7 +702,7 @@ func typeListInsertGenericsAfter(transaction *util.Transaction, parent AbstractT
 					)
 					left.Integrate(transaction, 0)
 					break
-				case *AbstractType:
+				case AbstractTypeInterface:
 					left = struts.NewItem(
 						util.NewID(ownClientId, util.GetState(store, ownClientId)),
 						left,
