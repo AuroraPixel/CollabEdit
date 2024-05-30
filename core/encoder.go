@@ -233,14 +233,15 @@ var maxStrBSize = len(strBuffer) / 3
 // WriteString 写入一个字符串
 func (e *Encoder) WriteString(str string) {
 	if len(str) < maxStrBSize {
-		// 可以将字符串编码到现有的缓冲区中
-		written := copy(strBuffer, []byte(str))
+		written := copy(strBuffer, str)
 		e.WriteVarUint(uint(written))
 		for i := 0; i < written; i++ {
 			e.Write(strBuffer[i])
 		}
 	} else {
-		e.WriteByteArray([]byte(str))
+		byteArray := []byte(str)
+		e.WriteVarUint(uint(len(byteArray)))
+		e.WriteByteArray(byteArray)
 	}
 }
 

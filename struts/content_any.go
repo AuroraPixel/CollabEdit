@@ -45,15 +45,15 @@ func (c *ContentAny) MergeWith(right AbstractContentInterface) bool {
 	return false
 }
 
-func (c *ContentAny) Integrate(transaction util.Transaction, item *Item) {
+func (c *ContentAny) Integrate(transaction *util.Transaction, item *Item) {
 	// 实现逻辑
 }
 
-func (c *ContentAny) Delete(transaction util.Transaction) {
+func (c *ContentAny) Delete(transaction *util.Transaction) {
 	// 实现逻辑
 }
 
-func (c *ContentAny) Gc(store util.StructStore) {
+func (c *ContentAny) Gc(store *util.StructStore) {
 	// 实现逻辑
 }
 

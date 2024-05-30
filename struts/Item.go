@@ -51,7 +51,7 @@ func NewItem(id *util.ID, left *Item, origin *util.ID,
 }
 
 // Deleted 方法返回此项是否被删除
-func (i *Item) Deleted() bool {
+func (i *Item) GetDeleted() bool {
 	return (i.Info & BIT3) > 0
 }
 
@@ -87,6 +87,38 @@ func (i *Item) SetKeep(doKeep bool) {
 	}
 }
 
+func (i *Item) Delete(transaction *util.Transaction) {
+	if !i.GetDeleted() {
+		parent := i.Parent
+		if i.Countable() && i.ParentSub == "" {
+			currLength := parent.GetLength()
+			newLength := currLength - i.Length
+			parent.SetLength(newLength)
+		}
+		i.MarkDeleted()
+		//TODO 需要完DeleteSet-addToDeleteSet
+		//util.AddToDeleteSet(transaction.DeleteSet,i.ID.Clock,i.Length)
+		//TODO 需要完Transaction-addChangedTypeToTransaction
+		//util.AddChangedTypeToTransaction(transaction, parent, i.ParentSub)
+		i.Content.Delete(transaction)
+	}
+}
+
+// GC 垃圾回收
+func (i *Item) GC(store *util.StructStore, parentGCd bool) {
+	if !i.GetDeleted() {
+		panic(util.ErrUnexpectedCase)
+	}
+	i.Content.Gc(store)
+	if parentGCd {
+		//TODO 需要完StructStore-replaceStruct
+		//ReplaceStruct(store, i,NewGC(i.ID, i.Length))
+	} else {
+		//TODO 需要完ContentDeleted
+		//i.Content = NewContentDeleted(i.Length)
+	}
+}
+
 // SplitItem 将 leftItem 分割为两个项目
 func SplitItem(transaction *util.Transaction, leftItem *Item, diff int) *Item {
 	// 创建 rightItem
@@ -103,7 +135,7 @@ func SplitItem(transaction *util.Transaction, leftItem *Item, diff int) *Item {
 		leftItem.Content.Splice(diff),    // 分割内容
 	)
 
-	if leftItem.Deleted() { // 如果 leftItem 被删除
+	if leftItem.GetDeleted() { // 如果 leftItem 被删除
 		rightItem.MarkDeleted() // 标记 rightItem 为删除
 	}
 	if leftItem.Keep() { // 如果 leftItem 需要保留
@@ -220,7 +252,7 @@ func SplitItem(transaction *util.Transaction, leftItem *Item, diff int) *Item {
 //			}
 //		}
 //
-//		if item.ParentSub == "" && item.Countable() && !item.Deleted() { // 如果没有父子项且可计数且未删除
+//		if item.ParentSub == "" && item.Countable() && !item.GetDeleted() { // 如果没有父子项且可计数且未删除
 //			item.Parent._length += item.Length // 更新父类型的长度
 //		}
 //		addStruct(transaction.Doc.Store, item)                                                                      // 向存储中添加结构
@@ -242,9 +274,9 @@ type AbstractContentInterface interface {
 	Copy() AbstractContentInterface
 	Splice(offset int) AbstractContentInterface
 	MergeWith(right AbstractContentInterface) bool
-	Integrate(transaction util.Transaction, item *Item)
-	Delete(transaction util.Transaction)
-	Gc(store util.StructStore)
+	Integrate(transaction *util.Transaction, item *Item)
+	Delete(transaction *util.Transaction)
+	Gc(store *util.StructStore)
 	Write(encoder util.EncoderInterface, offset int)
 	GetRef() int
 }

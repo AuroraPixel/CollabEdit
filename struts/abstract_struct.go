@@ -7,7 +7,7 @@ import (
 type AbstractStructInterface interface {
 	GetID() *util.ID                                                  //获取ID
 	GetLength() int                                                   //获取长度
-	Deleted() bool                                                    //删除
+	GetDeleted() bool                                                 //删除
 	MergeWith(right *AbstractStruct) bool                             //合并
 	Write(encoder util.EncoderInterface, offset int, encodingRef int) //写入
 	Integrate(transaction *util.Transaction, offset int)              //整合
@@ -37,7 +37,7 @@ func (a *AbstractStruct) GetLength() int {
 }
 
 // Deleted 获取Deleted属性
-func (a *AbstractStruct) Deleted() bool {
+func (a *AbstractStruct) GetDeleted() bool {
 	panic(util.ErrMethodUnimplemented)
 }
 

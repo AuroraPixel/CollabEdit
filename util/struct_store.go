@@ -6,8 +6,24 @@ import (
 	"math"
 )
 
+// PendingStructs 定义了 missing 和 update 字段
+type PendingStructs struct {
+	Missing map[int]int // 使用 map[int]int 表示 JavaScript 中的 Map<number, number>
+	Update  []byte      // 使用 []byte 表示 JavaScript 中的 Uint8Array
+}
+
 type StructStore struct {
-	Clients map[int][]struts.AbstractStructInterface
+	Clients        map[int][]struts.AbstractStructInterface
+	PendingStructs *PendingStructs
+	PendingDs      []byte
+}
+
+func NewStructStore() *StructStore {
+	return &StructStore{
+		Clients:        make(map[int][]struts.AbstractStructInterface),
+		PendingStructs: nil,
+		PendingDs:      nil,
+	}
 }
 
 // GetState 获取给定客户端在存储中的当前状态

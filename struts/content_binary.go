@@ -43,15 +43,15 @@ func (c *ContentBinary) MergeWith(right AbstractContentInterface) bool {
 	return false
 }
 
-func (c *ContentBinary) Integrate(transaction util.Transaction, item *Item) {
+func (c *ContentBinary) Integrate(transaction *util.Transaction, item *Item) {
 	// 实现逻辑
 }
 
-func (c *ContentBinary) Delete(transaction util.Transaction) {
+func (c *ContentBinary) Delete(transaction *util.Transaction) {
 	// 实现逻辑
 }
 
-func (c *ContentBinary) Gc(store util.StructStore) {
+func (c *ContentBinary) Gc(store *util.StructStore) {
 	// 实现逻辑
 }
 
