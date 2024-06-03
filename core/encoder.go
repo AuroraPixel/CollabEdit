@@ -1,11 +1,28 @@
 package core
 
 import (
-	"encoding/binary"
 	"math"
 	"reflect"
 	"strings"
 )
+
+const BITS0 = 0
+const BITS1 = 1
+const BITS2 = 3
+const BITS3 = 7
+const BITS4 = 15
+const BITS5 = 31
+const BITS6 = 63
+const BITS7 = 127
+const BITS8 = 255
+const BITS9 = 511
+const BITS10 = 1023
+const BITS11 = 2047
+const BITS12 = 4095
+const BITS13 = 8191
+const BITS14 = 16383
+const BITS15 = 32767
+const BITS16 = 65535
 
 type Encoder struct {
 	CPos  int      `json:"c_pos"` //当前写入的位置
@@ -96,20 +113,20 @@ func (e *Encoder) SetByte(pos int, num byte) {
 
 // WriteUint16 写入一个uint16
 func (e *Encoder) WriteUint16(num uint16) {
-	e.Write(byte(num & 0xFF))
-	e.Write(byte((num >> 8) & 0xFF))
+	e.Write(byte(num & BITS8))
+	e.Write(byte((num >> 8) & BITS8))
 }
 
 // SetUint16 指定位置写入一个uint16
 func (e *Encoder) SetUint16(pos int, num uint16) {
-	e.Set(pos, byte(num&0xFF))
-	e.Set(pos+1, byte((num>>8)&0xFF))
+	e.Set(pos, byte(num&BITS8))
+	e.Set(pos+1, byte((num>>8)&BITS8))
 }
 
 // WriteUint32 写入一个uint32
 func (e *Encoder) WriteUint32(num uint32) {
 	for i := 0; i < 4; i++ {
-		e.Write(byte(num & 0xFF))
+		e.Write(byte(num & BITS8))
 		num >>= 8
 	}
 }
@@ -117,71 +134,69 @@ func (e *Encoder) WriteUint32(num uint32) {
 // WriteUint32BigEndian 写入一个uint32（大端序）
 func (e *Encoder) WriteUint32BigEndian(num uint32) {
 	for i := 3; i >= 0; i-- {
-		e.Write(byte((num >> (8 * i)) & 0xFF))
+		e.Write(byte((num >> (8 * i)) & BITS8))
 	}
 }
 
 // SetUint32 指定位置写入一个uint32
 func (e *Encoder) SetUint32(pos int, num uint32) {
 	for i := 0; i < 4; i++ {
-		e.Set(pos+i, byte(num&0xFF))
+		e.Set(pos+i, byte(num&BITS8))
 		num >>= 8
 	}
 }
 
 // WriteVarUint 写入一个变长无符号整数
 func (e *Encoder) WriteVarUint(num uint) {
-	for num > 0x7F {
-		e.Write(byte(0x80 | (num & 0x7F)))
+	for num > BITS7 {
+		e.Write(byte(BITS8 | (num & BITS8)))
 		num >>= 7
 	}
-	e.Write(byte(num & 0x7F)) // 这里确保只写入低7位
+	e.Write(byte(num & BITS7)) // 这里确保只写入低7位
+}
+
+// IsNegativeZero 检查一个浮点数是否是负零
+func IsNegativeZero(num float64) bool {
+	return math.Signbit(num) && num == 0
 }
 
 // WriteVarInt 写入一个变长整数
 func (e *Encoder) WriteVarInt(num int) {
-	isNegative := num < 0
+	isNegative := IsNegativeZero(float64(num))
 	if isNegative {
 		num = -num
 	}
 
 	var b byte
-	if num > 0x3F {
-		b = 0x80
+	if num > BITS6 {
+		b = BITS8
 	} else {
-		b = 0x00
+		b = 0
 	}
 
 	if isNegative {
-		b |= 0x40
+		b |= BITS7
 	}
 
-	b |= byte(num & 0x3F)
+	b |= byte(num & BITS6)
 	e.Write(b)
 
 	num >>= 6 // 右移 6 位
 
 	// 我们不需要考虑 num === 0 的情况，因此可以使用不同的模式
 	for num > 0 {
-		if num > 0x7F {
-			b = 0x80
+		var nextByte byte
+		if num > BITS7 {
+			nextByte = BITS8
 		} else {
-			b = 0x00
+			nextByte = 0
 		}
 
-		b |= byte(num & 0x7F)
-		e.Write(b)
+		nextByte |= byte(num & BITS7)
+		e.Write(nextByte)
 
 		num >>= 7 // 右移 7 位
 	}
-}
-
-// 将布尔值转换为字节
-func boolToByte(b bool) byte {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // WriteByteArray 写入一个字节数组
@@ -255,42 +270,35 @@ func (e *Encoder) WriteBinaryEncoder(encoder *Encoder) {
 	e.WriteByteArray(encoder.ToBytes())
 }
 
-// WriteOnDataView 创建一个指定长度的缓冲区，用于写入数据
-func (e *Encoder) WriteOnDataView(length int) []byte {
-	e.VerifyLength(length)                  // 确认缓冲区有足够的空间
-	dview := e.CBuf[e.CPos : e.CPos+length] // 获取缓冲区的切片
-	e.CPos += length                        // 更新当前写入位置
-	return dview                            // 返回切片
+func (e *Encoder) WriteOnDataView(length int) *DataView {
+	e.VerifyLength(length)
+	var dview = NewDataView(e.CBuf, e.CPos, length)
+	e.CPos += length
+	return dview
 }
 
 // WriteFloat32 写入一个 float32
 func (e *Encoder) WriteFloat32(num float32) {
-	dview := e.WriteOnDataView(4)
-	binary.LittleEndian.PutUint32(dview, math.Float32bits(num))
+	e.WriteOnDataView(4).SetFloat32(0, num, false)
 }
 
 // WriteFloat64 写入一个 float64
 func (e *Encoder) WriteFloat64(num float64) {
-	dview := e.WriteOnDataView(8)
-	binary.LittleEndian.PutUint64(dview, math.Float64bits(num))
+	e.WriteOnDataView(8).SetFloat64(0, num, false)
 }
 
 // WriteBigInt64 写入一个 int64
 func (e *Encoder) WriteBigInt64(num int64) {
-	dview := e.WriteOnDataView(8)
-	binary.LittleEndian.PutUint64(dview, uint64(num))
+	e.WriteOnDataView(8).SetBigInt64(0, num, false)
 }
 
 // WriteBigUint64 写入一个 uint64
 func (e *Encoder) WriteBigUint64(num uint64) {
-	dview := e.WriteOnDataView(8)
-	binary.LittleEndian.PutUint64(dview, num)
+	e.WriteOnDataView(8).SetBigUint64(0, num, false)
 }
 
-// isFloat32 检查一个数是否可以作为32位浮点数进行编码
-func isFloat32(num float64) bool {
-	// 将float64转换为float32再转换回来
-	return float64(float32(num)) == num
+func isFloat32(n float64) bool {
+	return n >= -math.MaxFloat32 && n <= math.MaxFloat32
 }
 
 // WriteAny
@@ -329,59 +337,79 @@ func isFloat32(num float64) bool {
  * @param data interface{} 要编码的数据（可以是 undefined、null、number、bigint、boolean、string、map 或 slice）
  */
 func (e *Encoder) WriteAny(data interface{}) {
-	switch v := data.(type) {
-	case string:
-		// TYPE 119: STRING
-		e.Write(119)
-		e.WriteString(v)
-	case int, int32, int64:
-		if v.(int) <= math.MaxInt32 && v.(int) >= math.MinInt32 {
-			// TYPE 125: INTEGER
-			e.Write(125)
-			e.WriteVarInt(v.(int))
-		} else {
-			// TYPE 122: BigInt
-			e.Write(122)
-			e.WriteBigInt64(v.(int64))
-		}
-	case float32:
-		// TYPE 124: FLOAT32
-		e.Write(124)
-		e.WriteFloat32(v)
-	case float64:
-		// TYPE 123: FLOAT64
-		e.Write(123)
-		e.WriteFloat64(v)
-	case bool:
-		if v {
-			// TYPE 120: boolean (true)
-			e.Write(120)
-		} else {
-			// TYPE 121: boolean (false)
-			e.Write(121)
-		}
-	case nil:
+	if data == nil {
 		// TYPE 126: null
 		e.Write(126)
-	case []interface{}:
-		// TYPE 117: Array
-		e.Write(117)
-		e.WriteVarUint(uint(len(v)))
-		for _, elem := range v {
-			e.WriteAny(elem)
+		return
+	}
+	val := reflect.ValueOf(data)
+	switch val.Kind() {
+	case reflect.String:
+		// TYPE 119: STRING
+		e.Write(119)
+		e.WriteString(val.String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+		if val.Int() <= math.MaxInt32 && val.Int() >= math.MinInt32 {
+			// TYPE 125: INTEGER
+			e.Write(125)
+			e.WriteVarInt(int(val.Int()))
 		}
-	case []byte:
-		// TYPE 116: ArrayBuffer
-		e.Write(116)
-		e.WriteByteArray(v)
-	case map[string]interface{}:
+	case reflect.Int64:
+		// TYPE 122: BigInt
+		e.Write(122)
+		e.WriteBigInt64(val.Int())
+	case reflect.Float32:
+		// TYPE 124: FLOAT32
+		e.Write(124)
+		e.WriteFloat32(float32(val.Float()))
+	case reflect.Float64:
+		if isFloat32(val.Float()) {
+			// TYPE 124: FLOAT32
+			e.Write(124)
+			e.WriteFloat32(float32(val.Float()))
+		} else {
+			// TYPE 123: FLOAT64
+			e.Write(123)
+			e.WriteFloat64(val.Float())
+		}
+	case reflect.Bool:
+		// TYPE 120/121: boolean (true/false)
+		if val.Bool() {
+			e.Write(120)
+		} else {
+			e.Write(121)
+		}
+	case reflect.Slice:
+		if val.Type().Elem().Kind() == reflect.Uint8 {
+			// TYPE 116: ArrayBuffer
+			e.Write(116)
+			e.WriteByteArray(val.Bytes())
+		} else {
+			// TYPE 117: Array
+			e.Write(117)
+			e.WriteVarUint(uint(val.Len()))
+			for i := 0; i < val.Len(); i++ {
+				e.WriteAny(val.Index(i).Interface())
+			}
+		}
+	case reflect.Map:
 		// TYPE 118: Object
 		e.Write(118)
-		keys := reflect.ValueOf(data).MapKeys()
+		keys := val.MapKeys()
 		e.WriteVarUint(uint(len(keys)))
 		for _, key := range keys {
 			e.WriteString(key.String())
-			e.WriteAny(v[key.String()])
+			e.WriteAny(val.MapIndex(key).Interface())
+		}
+	case reflect.Struct:
+		// TYPE 118: Object
+		e.Write(118)
+		t := val.Type()
+		e.WriteVarUint(uint(t.NumField()))
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			e.WriteString(field.Name)
+			e.WriteAny(val.Field(i).Interface())
 		}
 	default:
 		// TYPE 127: undefined
