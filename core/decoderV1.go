@@ -103,6 +103,13 @@ func (d *DecoderV1) ReadUint32() uint32 {
 	return result
 }
 
+// 读取 Uint64
+func (d *DecoderV1) ReadBigUint64() uint64 {
+	dataView := d.readFromDataView(8)
+	value := dataView.GetBigUint64(0, false)
+	return value
+}
+
 // ReadUint32BigEndian 以大端序读取四个字节
 func (d *DecoderV1) ReadUint32BigEndian() uint32 {
 	var result uint32
@@ -150,12 +157,6 @@ func (d *DecoderV1) ReadFloat64() float64 {
 func (d *DecoderV1) ReadBigInt64() int64 {
 	dataView := d.readFromDataView(8)
 	return dataView.GetBigInt64(0, false)
-}
-
-// ReadBigUint64 读取 uint64
-func (d *DecoderV1) ReadBigUint64() uint64 {
-	dataView := d.readFromDataView(8)
-	return dataView.GetBigUint64(0, false)
 }
 
 // ReadTerminatedUint8Array 读取一个终止的 Uint8Array
